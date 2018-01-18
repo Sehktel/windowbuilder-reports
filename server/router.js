@@ -3,9 +3,9 @@
 const debug = require('debug')('wb:router');
 debug('start');
 
-const builder = require('./windowbuilder');
+import builder from './windowbuilder';
 
-const Router = require('koa-better-router');
+import Router from 'koa-better-router';
 const rep = Router({ prefix: '/r' });
 
 rep.loadMethods()
@@ -15,4 +15,4 @@ rep.loadMethods()
   })
   .get('/img/:class/:ref', builder);
 
-module.exports = rep;
+export default rep;

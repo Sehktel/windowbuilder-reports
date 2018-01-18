@@ -1,44 +1,59 @@
+
+// модификаторы data-объектов
+import modifiers from './modifiers';
+
+import modifiersNew from './modifiersNew';
+
 // дополняем прототип Object методами observe
-require('./observe');
+import './observe';
 
 const debug = require('debug')('wb:meta');
 
 // конструктор MetaEngine
-const MetaEngine = require('metadata-core')
-  .plugin(require('metadata-pouchdb'));
+import metaCore from 'metadata-core';
+import metaPouchdb from 'metadata-pouchdb';
+const MetaEngine = metaCore.plugin(metaPouchdb);
+
+// функция установки параметров сеанса
+const settings = require('./config/report.settings');
+
+// функция инициализации структуры метаданных
+const meta_init = require('./server/metadata/init.js');
+
 debug('required');
 
 // создаём контекст MetaEngine
 const $p = new MetaEngine();
 debug('created');
 
+// параметры сеанса инициализируем сразу
+$p.wsql.init(settings);
+
 // эмулируем излучатель событий dhtmlx
-require('./dhtmlx_eve')($p);
+import dhtmlx_eve from './dhtmlx_eve';
+dhtmlx_eve($p);
 
 // обеспечиваем совместимость DataManager с v0.12
-require('./meta_pouchdb')($p.classes.DataManager.prototype);
+import meta_pouchdb from './meta_pouchdb';
+meta_pouchdb($p.classes.DataManager.prototype);
 
 
 // инициализируем параметры сеанса и метаданные
 (async () => {
 
-  // функция установки параметров сеанса
-  const config_init = require('../../config/report.settings');
-
-  // функция инициализации структуры метаданных
-  const meta_init = require('./init');
-
-  // модификаторы data-объектов
-  const modifiers = require('./modifiers');
-
   // реквизиты подключения к couchdb
-  const {user_node} = config_init();
+  const {user_node} = settings();
 
-  // инициализируем метаданные
-  $p.wsql.init(config_init, meta_init);
+  // выполняем скрипт инициализации метаданных
+  meta_init($p);
+
+  // сообщяем адаптерам пути, суффиксы и префиксы
+  const {wsql, job_prm, adapters} = $p;
+  adapters.pouch.init(wsql, job_prm);
 
   // подключим модификаторы
   modifiers($p);
+  modifiersNew($p);
   debug('inited & modified');
 
   // загружаем кешируемые справочники в ram и начинаем следить за изменениями ram
@@ -72,15 +87,17 @@ require('./meta_pouchdb')($p.classes.DataManager.prototype);
         // формируем новый
         pouch.load_changes({docs: [change.doc]});
       }).on('error', (err) => {
-        // handle errors
+        debug(`change error ${err}`);
       });
       debug(`loadind to ram: READY`);
+      // обычно, это событие генерирует модуль pricing после загрузки цен, но в данном сервисе цены не нужны
+      pouch.emit('pouch_complete_loaded');
     },
   });
 
 })();
 
-module.exports = $p;
+export default $p;
 
 
 

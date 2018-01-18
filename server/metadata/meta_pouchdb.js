@@ -2,7 +2,7 @@
  * Обеспечивает совместимость DataManager с v0.12
  */
 
-module.exports = function(proto) {
+export default function(proto) {
   Object.defineProperties(proto, {
 
     // pouch_db: {

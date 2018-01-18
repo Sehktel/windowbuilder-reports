@@ -21,8 +21,8 @@ module.exports = function settings(prm) {
     rest_path: "",
 
     // расположение couchdb
-    couch_path: process.env.COUCHPATH || "/couchdb/wb_",
     //couch_path: "https://light.oknosoft.ru/couchdb/wb_",
+    couch_path: process.env.COUCHPATH || "/couchdb/wb_",
 
     // расположение couchdb для nodejs
     couch_local: process.env.COUCHLOCAL || "http://cou221:5984/wb_",
@@ -31,8 +31,8 @@ module.exports = function settings(prm) {
       meta: "auth/meta"
     },
 
-    // по умолчанию, обращаемся к зоне 1
-    zone: 1,
+    // по умолчанию, обращаемся к зоне 21
+    zone: 21,
 
     // объявляем номер демо-зоны
     zone_demo: 1,

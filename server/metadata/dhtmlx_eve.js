@@ -2,7 +2,7 @@
  * Эмулирует излучатель событий dhtmlx
  */
 
-module.exports = function($p) {
+export default function($p) {
 
   $p.eve = {
 

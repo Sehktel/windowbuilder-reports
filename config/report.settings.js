@@ -1,6 +1,6 @@
 
 // конфигурация подключения к CouchDB
-const config = require('./app.settings.js')
+const config = require('./app.settings');
 
 /**
  * ### При установке параметров сеанса
@@ -8,6 +8,7 @@ const config = require('./app.settings.js')
  *
  * @param prm {Object} - в свойствах этого объекта определяем параметры работы программы
  */
+
 module.exports = (prm) => {
 
   const base = config(prm);
@@ -24,7 +25,7 @@ module.exports = (prm) => {
     couch_path: base.couch_local,
 
     // по умолчанию, обращаемся к зоне 0
-    zone: process.env.ZONE || 2,
+    zone: process.env.ZONE || 21,
 
   })
 }
