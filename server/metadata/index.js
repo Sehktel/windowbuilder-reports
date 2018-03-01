@@ -23,7 +23,7 @@ const meta_init = require('./server/metadata/init.js');
 debug('required');
 
 // создаём контекст MetaEngine
-const $p = new MetaEngine();
+const $p = global.$p = new MetaEngine();
 debug('created');
 
 // параметры сеанса инициализируем сразу

@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.233, built:2018-01-17
+ windowbuilder-reports v2.0.237, built:2018-02-28
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -124,6 +124,9 @@ var modifiers = function($p) {
 		}
 	});
 })($p.enm.elm_types);
+(function(_mgr){
+  _mgr.additions_groups = [_mgr.Подоконник, _mgr.Водоотлив, _mgr.МоскитнаяСетка, _mgr.Откос, _mgr.Профиль, _mgr.Монтаж, _mgr.Доставка, _mgr.Набор];
+})($p.enm.inserts_types);
 (function($p){
 	$p.enm.open_types.__define({
 		is_opening: {
@@ -235,7 +238,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     });
   }
   prod_name(short) {
-    const {calc_order_row, calc_order, leading_product, sys, clr} = this;
+    const {calc_order_row, calc_order, leading_product, sys, clr, origin} = this;
     let name = '';
     if(calc_order_row) {
       if(calc_order.number_internal) {
@@ -265,6 +268,9 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
       }
       if(!sys.empty()) {
         name += '/' + sys.name;
+      }
+      else if(!origin.empty()) {
+        name += '/' + origin.name;
       }
       if(!short) {
         if(!clr.empty()) {
@@ -395,6 +401,56 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     }
     return this.owner;
   }
+  get builder_props() {
+    const defaults = $p.CatCharacteristics.builder_props_defaults;
+    let props;
+    try {
+      props = JSON.parse(this._obj.builder_props || '{}');
+    }
+    catch(e) {
+      props = {};
+    }
+    for(const prop in defaults){
+      if(!props.hasOwnProperty(prop)) {
+        props[prop] = defaults[prop];
+      }
+    }
+    return props;
+  }
+  set builder_props(v) {
+    const {_obj, _data} = this;
+    if(this.empty()) {
+      return;
+    }
+    const name = 'builder_props';
+    if(_data && _data._loading) {
+      _obj[name] = v;
+      return;
+    }
+    let _modified;
+    if(typeof _obj[name] !== 'string'){
+      _obj[name] = JSON.stringify($p.CatCharacteristics.builder_props_defaults);
+      _modified = true;
+    }
+    const props = JSON.parse(_obj[name]);
+    for(const prop in v){
+      if(props[prop] !== v[prop]) {
+        props[prop] = v[prop];
+        _modified = true;
+      }
+    }
+    if(_modified) {
+      _obj[name] = JSON.stringify(props);
+      this.__notify(name);
+    }
+  }
+};
+$p.CatCharacteristics.builder_props_defaults = {
+  auto_lines: true,
+  custom_lines: true,
+  cnns: true,
+  visualization: true,
+  txts: true
 };
 $p.CatCharacteristicsInsertsRow.prototype.value_change = function (field, type, value) {
   if(field == 'inset') {
@@ -432,7 +488,7 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
     });
   };
   return this.constructor.prototype.form_obj.call(this, pwnd, attr)
-    .then(function (res) {
+    .then((res) => {
       if(res) {
         o = res.o;
         wnd = res.wnd;
@@ -1072,15 +1128,15 @@ $p.cat.contracts.__define({
 		}
 	},
 	by_partner_and_org: {
-		value: function (partner, organization, contract_kind) {
-			if(!contract_kind)
-				contract_kind = $p.enm.contract_kinds.СПокупателем;
-			var res = this.find_rows({owner: partner, organization: organization, contract_kind: contract_kind});
-			res.sort(function (a, b) {
-				return a.date > b.date;
-			});
-			return res.length ? res[0] : this.get();
-		}
+    value: function (partner, organization, contract_kind = $p.enm.contract_kinds.СПокупателем) {
+      const {main_contract} = $p.cat.partners.get(partner);
+      if(main_contract && main_contract.contract_kind == contract_kind && main_contract.organization == organization){
+        return main_contract;
+      }
+      const res = this.find_rows({owner: partner, organization: organization, contract_kind: contract_kind});
+      res.sort((a, b) => a.date > b.date);
+      return res.length ? res[0] : this.get();
+    }
 	}
 });
 Object.defineProperties($p.cat.divisions, {
@@ -1088,7 +1144,7 @@ Object.defineProperties($p.cat.divisions, {
     value: function (selection, val) {
       const list = [];
       $p.current_user.acl_objs.find_rows({type: "cat.divisions"}, ({acl_obj}) => {
-        if(list.indexOf(acl_obj) == -1){
+        if(acl_obj && list.indexOf(acl_obj) == -1){
           list.push(acl_obj);
           acl_obj._children().forEach((o) => list.indexOf(o) == -1 && list.push(o));
         }
@@ -1431,7 +1487,8 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
             return;
           }
           if(dop_row.is_set_row){
-            dop_row.nom.get_spec(contour, cache).each((sub_row) => {
+            const {nom} = dop_row;
+            nom && nom.get_spec(contour, cache).each((sub_row) => {
               if(sub_row.is_procedure_row){
                 res.add(sub_row);
               }
@@ -1446,7 +1503,8 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
         });
       }
       if(row_furn.is_set_row){
-        row_furn.nom.get_spec(contour, cache, exclude_dop).each((sub_row) => {
+        const {nom} = row_furn;
+        nom && nom.get_spec(contour, cache, exclude_dop).each((sub_row) => {
           if(sub_row.is_procedure_row){
             res.add(sub_row);
           }
@@ -1497,8 +1555,9 @@ $p.CatFurnsSpecificationRow = class CatFurnsSpecificationRow extends $p.CatFurns
         }
         else {
           const elm = contour.profile_by_furn_side(row.side, cache);
-          len = elm._row.len - 2 * elm.nom.sizefurn;
+          len = elm ? (elm._row.len - 2 * elm.nom.sizefurn) : 0;
         }
+        len = len.round(0);
         if (len < row.lmin || len > row.lmax) {
           return res = false;
         }
@@ -1507,10 +1566,10 @@ $p.CatFurnsSpecificationRow = class CatFurnsSpecificationRow extends $p.CatFurns
     return res;
   }
   get nom() {
-    return this._getter('nom')
+    return this._getter('nom') || this._getter('nom_set');
   }
-  set nom (v) {
-    if(v !== ""){
+  set nom(v) {
+    if(v !== '') {
       this._setter('nom', v);
     }
   }
@@ -1525,12 +1584,132 @@ $p.CatFurnsSpecificationRow = class CatFurnsSpecificationRow extends $p.CatFurns
   const {fields} = md.get("cat.furns").tabular_sections.specification;
   fields.nom_set = fields.nom;
 })($p);
+$p.md.once('predefined_elmnts_inited', () => {
+  $p.cat.scheme_settings && $p.cat.scheme_settings.find_schemas('dp.buyers_order.production');
+});
 $p.cat.inserts.__define({
 	_inserts_types_filling: {
 		value: [
 			$p.enm.inserts_types.Заполнение
 		]
 	},
+  _prms_by_type: {
+	  value: function (insert_type) {
+      const prms = new Set();
+      this.find_rows({available: true, insert_type}, (inset) => {
+        inset.used_params.forEach((param) => {
+          !param.is_calculated && prms.add(param);
+        });
+        inset.specification.forEach(({nom}) => {
+          const {used_params} = nom;
+          used_params && used_params.forEach((param) => {
+            !param.is_calculated && prms.add(param);
+          });
+        });
+      });
+      return prms;
+    }
+  },
+  ItemData: {
+    value: class ItemData {
+      constructor(item, Renderer) {
+        this.Renderer = Renderer;
+        this.count = 0;
+        class ItemRow extends $p.DpBuyers_orderProductionRow {
+          tune(ref, mf, column) {
+            const {inset} = this;
+            const prm = $p.cch.properties.get(ref);
+            if(mf.choice_params) {
+              const adel = new Set();
+              for(const choice of mf.choice_params) {
+                if(choice.name !== 'owner' && choice.path != prm) {
+                  adel.add(choice);
+                }
+              }
+              for(const choice of adel) {
+                mf.choice_params.splice(mf.choice_params.indexOf(choice), 1);
+              }
+            }
+            const prms = new Set();
+            inset.used_params.forEach((param) => {
+              !param.is_calculated && prms.add(param);
+            });
+            inset.specification.forEach(({nom}) => {
+              const {used_params} = nom;
+              used_params && used_params.forEach((param) => {
+                !param.is_calculated && prms.add(param);
+              });
+            });
+            mf.read_only = !prms.has(prm);
+            const links = prm.params_links({grid: {selection: {}}, obj: this});
+            const hide = links.some((link) => link.hide);
+            if(hide && !mf.read_only) {
+              mf.read_only = true;
+            }
+            if(links.length) {
+              const filter = {};
+              prm.filter_params_links(filter, null, links);
+              filter.ref && mf.choice_params.push({
+                name: 'ref',
+                path: filter.ref,
+              });
+            }
+          }
+        }
+        this.ProductionRow = ItemRow;
+        const meta = $p.dp.buyers_order.metadata('production');
+        this.meta = meta._clone();
+        this.meta.fields.inset.choice_params[0].path = item;
+        const changed = new Set();
+        for (const param of $p.cat.inserts._prms_by_type(item)) {
+          $p.cat.scheme_settings.find_rows({obj: 'dp.buyers_order.production', name: item.name}, (scheme) => {
+            if(!scheme.fields.find({field: param.ref})) {
+              const row = scheme.fields.add({
+                field: param.ref,
+                caption: param.caption,
+                use: true,
+              });
+              const note = scheme.fields.find({field: 'note'});
+              note && scheme.fields.swap(row, note);
+              changed.add(scheme);
+            }
+          });
+          const mf = this.meta.fields[param.ref] = {
+            synonym: param.caption,
+            type: param.type,
+          };
+          if(param.type.types.some(type => type === 'cat.property_values')) {
+            mf.choice_params = [{name: 'owner', path: param}];
+          }
+          Object.defineProperty(ItemRow.prototype, param.ref, {
+            get: function () {
+              const {product_params} = this._owner._owner;
+              const row = product_params.find({elm: this.row, param}) || product_params.add({elm: this.row, param});
+              return row.value;
+            },
+            set: function (v) {
+              const {product_params} = this._owner._owner;
+              const row = product_params.find({elm: this.row, param}) || product_params.add({elm: this.row, param});
+              row.value = v;
+            }
+          });
+        }
+        for(const scheme of changed) {
+          const {doc} = $p.adapters.pouch.local;
+          if(doc.adapter === 'http' && !scheme.user) {
+            doc.getSession().then(({userCtx}) => {
+              if(userCtx.roles.indexOf('doc_full') !== -1) {
+                scheme.save();
+              }
+            });
+          }
+          else {
+            scheme.save();
+          }
+        }
+      }
+    }
+  },
 	by_thickness: {
 		value: function (min, max) {
 			if(!this._by_thickness){
@@ -1562,12 +1741,25 @@ $p.cat.inserts.__define({
 $p.CatInserts = class CatInserts extends $p.CatInserts {
   nom(elm, strict) {
     const {_data} = this;
-    if(!strict && _data.nom){
+    if(!strict && !elm && _data.nom) {
       return _data.nom;
     }
     const main_rows = [];
     let _nom;
-    this.specification.find_rows({is_main_elm: true}, (row) => main_rows.push(row));
+    const {check_params} = ProductsBuilding;
+    this.specification.find_rows({is_main_elm: true}, (row) => {
+      if(elm && !check_params({
+          params: this.selection_params,
+          ox: elm.project.ox,
+          elm: elm,
+          row_spec: row,
+          cnstr: 0,
+          origin: elm.fake_origin || 0,
+        })) {
+        return;
+      }
+      main_rows.push(row);
+    });
     if(!main_rows.length && !strict && this.specification.count()){
       main_rows.push(this.specification.get(0));
     }
@@ -1679,7 +1871,8 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
         if(!elm.joined_imposts(true)){
           return false;
         }
-      }else if(row.impost_fixation == $p.enm.impost_mount_options.НетКрепленийИмпостовИРам){
+      }
+      else if(row.impost_fixation == $p.enm.impost_mount_options.НетКрепленийИмпостовИРам){
         if(elm.joined_imposts(true)){
           return false;
         }
@@ -1730,7 +1923,7 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
         return res;
       }
     }
-    this.specification.each((row) => {
+    this.specification.forEach((row) => {
       if(!check_restrictions(row, elm, insert_type == Профиль, len_angl)){
         return;
       }
@@ -1811,18 +2004,23 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
             row_prm.is_linear = () => rib.profile ? rib.profile.is_linear() : true;
             if(this.check_restrictions(row_ins_spec, row_prm, true)){
               row_spec = new_spec_row({elm, row_base: row_ins_spec, origin, spec, ox});
-              if(!row_ins_spec.formula.empty()){
-                const qty = row_ins_spec.formula.execute({
-                  ox: ox,
-                  elm: rib.profile || rib,
-                  cnstr: len_angl && len_angl.cnstr || 0,
-                  inset: (len_angl && len_angl.hasOwnProperty('cnstr')) ? len_angl.origin : $p.utils.blank.guid,
-                  row_ins: row_ins_spec,
-                  row_spec: row_spec,
-                  len: rib.len
-                });
+              const qty = !row_ins_spec.formula.empty() && row_ins_spec.formula.execute({
+                ox: ox,
+                elm: rib.profile || rib,
+                cnstr: len_angl && len_angl.cnstr || 0,
+                inset: (len_angl && len_angl.hasOwnProperty('cnstr')) ? len_angl.origin : $p.utils.blank.guid,
+                row_ins: row_ins_spec,
+                row_spec: row_spec,
+                len: rib.len
+              });
+              if(qty) {
+                if(!row_spec.qty) {
+                  row_spec.qty = qty;
+                }
               }
-              calc_qty_len(row_spec, row_ins_spec, rib.len);
+              else {
+                calc_qty_len(row_spec, row_ins_spec, rib.len);
+              }
               calc_count_area_mass(row_spec, spec, _row, row_ins_spec.angle_calc_method);
             }
             row_spec = null;
@@ -1904,8 +2102,10 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
         _data.thickness = nom.thickness;
       }
       else{
-        this.specification.forEach((row) => {
-          _data.thickness += row.nom.thickness;
+        this.specification.forEach(({nom}) => {
+          if(nom) {
+            _data.thickness += nom.thickness;
+          }
         });
       }
     }
@@ -1913,9 +2113,9 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
   }
   get used_params() {
     const res = [];
-    this.selection_params.each((row) => {
-      if(!row.param.empty() && res.indexOf(row.param) == -1){
-        res.push(row.param);
+    this.selection_params.forEach(({param}) => {
+      if(!param.empty() && res.indexOf(param) == -1){
+        res.push(param);
       }
     });
     return res;
@@ -2281,57 +2481,6 @@ $p.CatProduction_params.prototype.__define({
 		}
 	}
 });
-(function (_mgr) {
-  _mgr.metadata().tabular_sections.production.fields.characteristic._option_list_local = true;
-  _mgr._destinations_condition = {predefined_name: {in: ['Документ_Расчет', 'Документ_ЗаказПокупателя']}};
-  _mgr.build_search = function (tmp, obj) {
-    const {number_internal, client_of_dealer, partner, note} = obj;
-    tmp.search = (obj.number_doc +
-      (number_internal ? ' ' + number_internal : '') +
-      (client_of_dealer ? ' ' + client_of_dealer : '') +
-      (partner.name ? ' ' + partner.name : '') +
-      (note ? ' ' + note : '')).toLowerCase();
-  };
-  _mgr.load_templates = async function () {
-    if(!$p.job_prm.builder) {
-      $p.job_prm.builder = {};
-    }
-    if(!$p.job_prm.builder.base_block) {
-      $p.job_prm.builder.base_block = [];
-    }
-    if(!$p.job_prm.pricing) {
-      $p.job_prm.pricing = {};
-    }
-    const {base_block} = $p.job_prm.builder;
-    $p.cat.production_params.forEach((o) => {
-      if(!o.is_folder) {
-        o.base_blocks.forEach((row) => {
-          if(base_block.indexOf(row.calc_order) == -1) {
-            base_block.push(row.calc_order);
-          }
-        });
-      }
-    });
-    const refs = [];
-    for (let o of base_block) {
-      refs.push(o.ref);
-      if(refs.length > 9) {
-        await _mgr.adapter.load_array(_mgr, refs);
-        refs.length = 0;
-      }
-    }
-    if(refs.length) {
-      await _mgr.adapter.load_array(_mgr, refs);
-    }
-    refs.length = 0;
-    base_block.forEach(({production}) => {
-      if(production.count()) {
-        refs.push(production.get(0).characteristic.ref);
-      }
-    });
-    return $p.cat.characteristics.adapter.load_array($p.cat.characteristics, refs);
-  };
-})($p.doc.calc_order);
 $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
   after_create() {
     const {enm, cat, current_user, DocCalc_order} = $p;
@@ -2414,7 +2563,8 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     else {
       _obj.state = 'draft';
     }
-    this._manager.pouch_db.query('svgs', {startkey: [this.ref, 0], endkey: [this.ref, 10e9]})
+    const rows_saver = this.product_rows(true);
+    const res = this._manager.pouch_db.query('svgs', {startkey: [this.ref, 0], endkey: [this.ref, 10e9]})
       .then(({rows}) => {
         const deleted = [];
         for (const {id} of rows) {
@@ -2431,9 +2581,15 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         res.length && this._manager.emit_async('svgs', this);
       })
       .catch((err) => null);
+    if(this._data.before_save_sync) {
+      return res
+        .then(() => rows_saver)
+        .then(() => this);
+    }
   }
   value_change(field, type, value) {
     if(field == 'organization') {
+      this.organization = value;
       this.new_number_doc();
       if(this.contract.organization != value) {
         this.contract = $p.cat.contracts.by_partner_and_org(this.partner, value);
@@ -2443,6 +2599,10 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       this.contract = $p.cat.contracts.by_partner_and_org(value, this.organization);
     }
     this._manager.emit_add_fields(this, ['contract']);
+  }
+  after_del_row(name) {
+    name === 'production' && this.product_rows();
+    return this;
   }
   get doc_currency() {
     const currency = this.contract.settlements_currency;
@@ -2468,6 +2628,27 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     this._setter('contract', v);
     this.vat_consider = this.contract.vat_consider;
     this.vat_included = this.contract.vat_included;
+  }
+  product_rows(save) {
+    const res = [];
+    this.production.forEach(({row, characteristic}) => {
+      if(!characteristic.empty() && characteristic.calc_order === this) {
+        if(characteristic.product !== row || characteristic.partner !== this.partner || characteristic._modified) {
+          characteristic.product = row;
+          if(!characteristic.owner.empty()) {
+            if(save) {
+              res.push(characteristic.save());
+            }
+            else {
+              characteristic.name = characteristic.prod_name();
+            }
+          }
+        }
+      }
+    });
+    if(save) {
+      return Promise.all(res);
+    }
   }
   dispatching_totals() {
     var options = {
@@ -2498,6 +2679,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
   }
   print_data(attr = {}) {
     const {organization, bank_account, partner, contract, manager} = this;
+    const {individual_person} = manager;
     const our_bank_account = bank_account && !bank_account.empty() ? bank_account : organization.main_bank_account;
     const get_imgs = [];
     const {cat: {contact_information_kinds, characteristics}, utils: {blank, blob_as_text}} = $p;
@@ -2513,8 +2695,6 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       ДоговорНомер: contract.number_doc ? contract.number_doc : this.number_doc,
       ДоговорСрокДействия: moment(contract.validity).format('L'),
       ЗаказНомер: this.number_doc,
-      Примечание: this.note,
-      НомерВнутренний: this.number_internal,
       Контрагент: partner.presentation,
       КонтрагентОписание: partner.long_presentation,
       КонтрагентДокумент: '',
@@ -2575,24 +2755,26 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       ОрганизацияСвидетельствоНаименованиеОргана: organization.certificate_authority_name,
       ОрганизацияСвидетельствоСерияНомер: organization.certificate_series_number,
       ОрганизацияЮрФизЛицо: organization.individual_legal.presentation,
+      Офис: this.department.presentation,
       ПродукцияЭскизы: {},
       Проект: this.project.presentation,
       СистемыПрофилей: this.sys_profile,
       СистемыФурнитуры: this.sys_furn,
       Сотрудник: manager.presentation,
-      СотрудникДолжность: manager.individual_person.Должность || 'менеджер',
-      СотрудникДолжностьРП: manager.individual_person.ДолжностьРП,
-      СотрудникИмя: manager.individual_person.Имя,
-      СотрудникИмяРП: manager.individual_person.ИмяРП,
-      СотрудникОснованиеРП: manager.individual_person.ОснованиеРП,
-      СотрудникОтчество: manager.individual_person.Отчество,
-      СотрудникОтчествоРП: manager.individual_person.ОтчествоРП,
-      СотрудникФамилия: manager.individual_person.Фамилия,
-      СотрудникФамилияРП: manager.individual_person.ФамилияРП,
-      СотрудникФИО: manager.individual_person.Фамилия +
-      (manager.individual_person.Имя ? ' ' + manager.individual_person.Имя[1].toUpperCase() + '.' : '' ) +
-      (manager.individual_person.Отчество ? ' ' + manager.individual_person.Отчество[1].toUpperCase() + '.' : ''),
-      СотрудникФИОРП: manager.individual_person.ФамилияРП + ' ' + manager.individual_person.ИмяРП + ' ' + manager.individual_person.ОтчествоРП,
+      СотрудникКомментарий: manager.note,
+      СотрудникДолжность: individual_person.Должность || 'менеджер',
+      СотрудникДолжностьРП: individual_person.ДолжностьРП,
+      СотрудникИмя: individual_person.Имя,
+      СотрудникИмяРП: individual_person.ИмяРП,
+      СотрудникОснованиеРП: individual_person.ОснованиеРП,
+      СотрудникОтчество: individual_person.Отчество,
+      СотрудникОтчествоРП: individual_person.ОтчествоРП,
+      СотрудникФамилия: individual_person.Фамилия,
+      СотрудникФамилияРП: individual_person.ФамилияРП,
+      СотрудникФИО: individual_person.Фамилия +
+      (individual_person.Имя ? ' ' + individual_person.Имя[0].toUpperCase() + '.' : '' ) +
+      (individual_person.Отчество ? ' ' + individual_person.Отчество[0].toUpperCase() + '.' : ''),
+      СотрудникФИОРП: individual_person.ФамилияРП + ' ' + individual_person.ИмяРП + ' ' + individual_person.ОтчествоРП,
       СуммаДокумента: this.doc_amount.toFixed(2),
       СуммаДокументаПрописью: this.doc_amount.in_words(),
       СуммаДокументаБезСкидки: this.production._obj.reduce((val, row) => val + row.quantity * row.price, 0).toFixed(2),
@@ -2629,46 +2811,53 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         break;
       }
     }
-    this.production.forEach((row) => {
-      if(!row.characteristic.empty() && !row.nom.is_procedure && !row.nom.is_service && !row.nom.is_accessory) {
-        res.Продукция.push(this.row_description(row));
-        res.ВсегоИзделий += row.quantity;
-        res.ВсегоПлощадьИзделий += row.quantity * row.s;
-        if(attr.sizes === false) {
+    return this.load_production().then(() => {
+      this.production.forEach((row) => {
+        if(!row.characteristic.empty() && !row.nom.is_procedure && !row.nom.is_service && !row.nom.is_accessory) {
+          res.Продукция.push(this.row_description(row));
+          res.ВсегоИзделий += row.quantity;
+          res.ВсегоПлощадьИзделий += row.quantity * row.s;
+          if(attr.sizes === false) {
+          }
+          else {
+            if($p.job_prm.use_svgs) {
+              get_imgs.push(characteristics.get_attachment(row.characteristic.ref, 'svg')
+                .then(blob_as_text)
+                .then((svg_text) => res.ПродукцияЭскизы[row.characteristic.ref] = svg_text)
+                .catch((err) => err && err.status != 404 && $p.record_log(err))
+              );
+            }
+            else if(row.characteristic.svg) {
+              res.ПродукцияЭскизы[row.characteristic.ref] = row.characteristic.svg;
+            }
+          }
         }
-        else {
-          get_imgs.push(characteristics.get_attachment(row.characteristic.ref, 'svg')
-            .then(blob_as_text)
-            .then((svg_text) => res.ПродукцияЭскизы[row.characteristic.ref] = svg_text)
-            .catch((err) => err && err.status != 404 && $p.record_log(err))
-          );
+        else if(!row.nom.is_procedure && !row.nom.is_service && row.nom.is_accessory) {
+          res.Аксессуары.push(this.row_description(row));
         }
-      }
-      else if(!row.nom.is_procedure && !row.nom.is_service && row.nom.is_accessory) {
-        res.Аксессуары.push(this.row_description(row));
-      }
-      else if(!row.nom.is_procedure && row.nom.is_service && !row.nom.is_accessory) {
-        res.Услуги.push(this.row_description(row));
-      }
-    });
-    res.ВсегоПлощадьИзделий = res.ВсегоПлощадьИзделий.round(3);
-    return (get_imgs.length ? Promise.all(get_imgs) : Promise.resolve([]))
-      .then(() => $p.load_script('/dist/qrcodejs/qrcode.min.js', 'script'))
-      .then(() => {
-        const svg = document.createElement('SVG');
-        svg.innerHTML = '<g />';
-        const qrcode = new QRCode(svg, {
-          text: 'http://www.oknosoft.ru/zd/',
-          width: 100,
-          height: 100,
-          colorDark: '#000000',
-          colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.H,
-          useSVG: true
-        });
-        res.qrcode = svg.innerHTML;
-        return res;
+        else if(!row.nom.is_procedure && row.nom.is_service && !row.nom.is_accessory) {
+          res.Услуги.push(this.row_description(row));
+        }
       });
+      res.ВсегоПлощадьИзделий = res.ВсегоПлощадьИзделий.round(3);
+      return (get_imgs.length ? Promise.all(get_imgs) : Promise.resolve([]))
+        .then(() => $p.load_script('/dist/qrcodejs/qrcode.min.js', 'script'))
+        .then(() => {
+          const svg = document.createElement('SVG');
+          svg.innerHTML = '<g />';
+          const qrcode = new QRCode(svg, {
+            text: 'http://www.oknosoft.ru/zd/',
+            width: 100,
+            height: 100,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H,
+            useSVG: true
+          });
+          res.qrcode = svg.innerHTML;
+          return res;
+        });
+    });
   }
   row_description(row) {
     if(!(row instanceof $p.DocCalc_orderProductionRow) && row.characteristic) {
@@ -2688,7 +2877,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       Площадь: row.s,
       Длинна: row.len,
       Ширина: row.width,
-      ВсегоПлощадь: row.s*row.quantity,
+      ВсегоПлощадь: row.s * row.quantity,
       Примечание: row.note,
       Номенклатура: nom.name_full || nom.name,
       Характеристика: characteristic.name,
@@ -2799,7 +2988,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     const prod = [];
     const {characteristics} = $p.cat;
     this.production.forEach(({nom, characteristic}) => {
-      if(!characteristic.empty() && (forse || characteristic.is_new()) && !nom.is_procedure && !nom.is_accessory) {
+      if(!characteristic.empty() && (forse || characteristic.is_new())) {
         prod.push(characteristic.ref);
       }
     });
@@ -2807,8 +2996,10 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       .then(() => {
         prod.length = 0;
         this.production.forEach(({nom, characteristic}) => {
-          if(!characteristic.empty() && !nom.is_procedure && !nom.is_accessory) {
-            prod.push(characteristic);
+          if(!characteristic.empty()) {
+            if((!nom.is_procedure && !nom.is_accessory) || characteristic.specification.count() || characteristic.constructions.count() || characteristic.coordinates.count()){
+              prod.push(characteristic);
+            }
           }
         });
         return prod;
@@ -2863,10 +3054,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       cx = Promise.resolve(ox);
       return false;
     }
-    if(row.characteristic.empty()){
-      mgr.find_rows({calc_order: this, product: row.row}, fill_cx);
-    }
-    else if(!row.characteristic._deleted){
+    if(!row.characteristic.empty() && !row.characteristic._deleted){
       fill_cx(row.characteristic);
     }
     return (cx || mgr.create({
@@ -2876,7 +3064,14 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     }, true))
       .then((ox) => {
         if(row_spec instanceof $p.DpBuyers_orderProductionRow) {
-          ox.owner = row_spec.inset.nom(elm, true);
+          if(params) {
+            params.find_rows({elm: row_spec.row}, (prow) => {
+              ox.params.add(prow, true).inset = row_spec.inset;
+            });
+          }
+          elm.project = {ox};
+          elm.fake_origin = row_spec.inset;
+          ox.owner = row_spec.inset.nom(elm);
           ox.origin = row_spec.inset;
           ox.x = row_spec.len;
           ox.y = row_spec.height;
@@ -2884,11 +3079,6 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
           ox.s = row_spec.s || row_spec.len * row_spec.height / 1000000;
           ox.clr = row_spec.clr;
           ox.note = row_spec.note;
-          if(params) {
-            params.find_rows({elm: row_spec.row}, (prow) => {
-              ox.params.add(prow, true).inset = row_spec.inset;
-            });
-          }
         }
         Object.assign(row._obj, {
           characteristic: ox.ref,
@@ -3176,7 +3366,8 @@ var cch_predefined_elmnts = function ($p) {
                     res[row.elm] = _mgr ? _mgr.get(row.value, false, false) : row.value;
                   });
                   return res;
-                })()
+                })(),
+                enumerable: true
               });
             }
             else if(row.list) {
@@ -3192,7 +3383,8 @@ var cch_predefined_elmnts = function ($p) {
                   else {
                     return row.value;
                   }
-                })
+                }),
+                enumerable: true
               });
             }
             else {
@@ -3201,7 +3393,8 @@ var cch_predefined_elmnts = function ($p) {
               }
               job_prm[parents[row.parent]].__define(row.synonym, {
                 value: _mgr ? _mgr.get(row.value, false, false) : row.value,
-                configurable: true
+                configurable: true,
+                enumerable: true
               });
             }
           }
@@ -3221,7 +3414,10 @@ var cch_predefined_elmnts = function ($p) {
           }
         }
         doc.calc_order.load_templates && setTimeout(doc.calc_order.load_templates.bind(doc.calc_order), 1000);
-        setTimeout(() => md.emit('predefined_elmnts_inited'), 100);
+        setTimeout(() => $p.adapters.pouch.local.doc.get('_design/svgs')
+          .then(() => $p.job_prm.use_svgs = true)
+          .catch(() => $p.job_prm.use_svgs = false)
+          .then(() => md.emit('predefined_elmnts_inited')), 100);
       });
   });
   delete $p.CchPredefined_elmnts.prototype.value;
@@ -3410,7 +3606,7 @@ var cch_properties = function ($p) {
           try {
             const arr = JSON.parse(txt_row);
             const {types} = this.type;
-            if(types.length == 1) {
+            if(types && types.length == 1) {
               const mgr = $p.md.mgr_by_class_name(types[0]);
               return arr.map((ref) => mgr.get(ref, false));
             }
@@ -3476,8 +3672,11 @@ var cch_properties = function ($p) {
       }
     },
     filter_params_links: {
-      value: function (filter, attr) {
-        this.params_links(attr).forEach((link) => {
+      value: function (filter, attr, links) {
+        if(!links) {
+          links = this.params_links(attr);
+        }
+        links.forEach((link) => {
           if(!filter.ref) {
             filter.ref = {in: []};
           }
@@ -3540,6 +3739,13 @@ var i18ru = function ($p) {
     ruler_base: 'По опорным линиям',
     ruler_inner: 'По внутренним линиям',
     ruler_outer: 'По внешним линиям',
+    show_not_implemented: function () {
+      this.show_msg({
+        type: 'alert-warning',
+        text: this.not_implemented,
+        title: this.main_title
+      });
+    },
   });
 };
 
@@ -3650,7 +3856,7 @@ const MetaEngine = metaCore.plugin(metaPouchdb);
 const settings = require('./config/report.settings');
 const meta_init = require('./server/metadata/init.js');
 debug$2('required');
-const $p = new MetaEngine();
+const $p = global.$p = new MetaEngine();
 debug$2('created');
 $p.wsql.init(settings);
 dhtmlx_eve($p);
@@ -3823,7 +4029,7 @@ class GlassSegment {
     this.profile = profile;
     this.b = b.clone();
     this.e = e.clone();
-    this.outer = !!outer;
+    this.outer = outer;
     this.segment();
   }
   segment() {
@@ -3845,6 +4051,96 @@ class GlassSegment {
       this.segment();
     }
   }
+  break_by_angle(nodes, segments, point, offset, curr_profile, segm_profile) {
+    const node = nodes.byPoint(point);
+    if(!node) {
+      return false;
+    }
+    let tangent = curr_profile.generatrix.getTangentAt(offset);
+    if(this.outer) {
+      tangent = tangent.negate();
+    }
+    const angles = [];
+    for(const elm of node) {
+      if(elm.profile === curr_profile) {
+        continue;
+      }
+      const {generatrix} = elm.profile;
+      const ppoint = generatrix.getNearestPoint(point);
+      const poffset = generatrix.getOffsetOf(ppoint);
+      const ptangent = generatrix.getTangentAt(poffset);
+      for(const segm of segments) {
+        if(segm.profile === elm.profile && segm.b.is_nearest(ppoint, true)) {
+          angles.push({profile: elm.profile, angle: tangent.getDirectedAngle(segm.outer ? ptangent.negate() : ptangent)});
+        }
+      }
+    }
+    let angle;
+    for(const elm of angles) {
+      if(elm.profile === segm_profile && (!angle || elm.angle > angle)) {
+        angle = elm.angle;
+      }
+    }
+    if(angle < 0) {
+      return true;
+    }
+    for(const elm of angles) {
+      if(elm.profile !== segm_profile && elm.angle > angle) {
+        return true;
+      }
+    }
+  }
+  has_cnn(segm, nodes, segments) {
+    const point = segm.b;
+    if(!this.e.is_nearest(point)) {
+      return false;
+    }
+    let curr_profile = this.profile;
+    let segm_profile = segm.profile;
+    while (curr_profile.parent instanceof ProfileItem) {
+      curr_profile = curr_profile.parent;
+    }
+    while (segm_profile.parent instanceof ProfileItem) {
+      segm_profile = segm_profile.parent;
+    }
+    if(curr_profile.b.is_nearest(point, true)) {
+      const by_angle = this.break_by_angle(nodes, segments, point, 0, curr_profile, segm_profile);
+      if(by_angle) {
+        return false;
+      }
+      else if(by_angle === undefined || curr_profile.cnn_point('b').profile === segm_profile) {
+        return true;
+      }
+    }
+    if(curr_profile.e.is_nearest(point, true)) {
+      const by_angle = this.break_by_angle(nodes, segments, point, curr_profile.generatrix.length, curr_profile, segm_profile);
+      if(by_angle) {
+        return false;
+      }
+      else if(by_angle === undefined || curr_profile.cnn_point('e').profile === segm_profile) {
+        return true;
+      }
+    }
+    if(segm_profile.b.is_nearest(point, true)) {
+      const by_angle = segm.break_by_angle(nodes, segments, point, 0, segm_profile, curr_profile);
+      if(by_angle) {
+        return false;
+      }
+      else if(by_angle === undefined || segm_profile.cnn_point('b').profile == curr_profile) {
+        return true;
+      }
+    }
+    if(segm_profile.e.is_nearest(point, true)) {
+      const by_angle = segm.break_by_angle(nodes, segments, point, segm_profile.generatrix.length, segm_profile, curr_profile);
+      if(by_angle) {
+        return false;
+      }
+      else if(by_angle === undefined || segm_profile.cnn_point('e').profile == curr_profile) {
+        return true;
+      }
+    }
+    return false;
+  }
   get _sub() {
     const {sub_path} = this;
     return {
@@ -3861,6 +4157,15 @@ class GlassSegment {
         sub_path && (sub_path.lastSegment.point = v);
       },
     };
+  }
+}
+class PointMap extends Map {
+  byPoint(point) {
+    for(const [key, value] of this) {
+      if(point.is_nearest(key)) {
+        return value.length > 2 && value;
+      }
+    }
   }
 }
 class Contour extends AbstractFilling(paper$1.Layer) {
@@ -3937,6 +4242,7 @@ class Contour extends AbstractFilling(paper$1.Layer) {
   }
   get glass_contours() {
     const segments = this.glass_segments;
+    const nodes = this.count_nodes();
     const res = [];
     let curr, acurr;
     function find_next(curr) {
@@ -3945,7 +4251,7 @@ class Contour extends AbstractFilling(paper$1.Layer) {
         segments.forEach((segm) => {
           if (segm == curr || segm.profile == curr.profile)
             return;
-          if (curr.e.is_nearest(segm.b) && curr.profile.has_cnn(segm.profile, segm.b)) {
+          if (curr.has_cnn(segm, nodes, segments)) {
             if (segments.length < 3 || curr.e.subtract(curr.b).getDirectedAngle(segm.e.subtract(segm.b)) >= 0)
               curr.anext.push(segm);
           }
@@ -3955,13 +4261,13 @@ class Contour extends AbstractFilling(paper$1.Layer) {
     }
     function go_go(segm) {
       const anext = find_next(segm);
-      for (let i = 0; i < anext.length; i++) {
-        if (anext[i] == curr) {
+      for (const next of anext) {
+        if (next === curr) {
           return anext;
         }
-        else if (acurr.every((el) => el != anext[i])) {
-          acurr.push(anext[i]);
-          return go_go(anext[i]);
+        else if (acurr.every((el) => el !== next)) {
+          acurr.push(next);
+          return go_go(next);
         }
       }
     }
@@ -4153,6 +4459,17 @@ class Contour extends AbstractFilling(paper$1.Layer) {
       }
       return 0;
     }
+    function push_new(profile, b, e, outer = false) {
+      if(b.is_nearest(e, 0)){
+        return;
+      }
+      for(const segm of nodes) {
+        if(segm.profile === profile && segm.b.equals(b) && segm.e.equals(e) && segm.outer == outer){
+          return;
+        }
+      }
+      nodes.push(new GlassSegment(profile, b, e, outer));
+    }
     this.profiles.forEach((p) => {
       const sort = fn_sort.bind(p.generatrix);
       const ip = p.joined_imposts();
@@ -4163,36 +4480,39 @@ class Contour extends AbstractFilling(paper$1.Layer) {
       if (ip.inner.length) {
         ip.inner.sort(sort);
         if (!pb.is_i && !pbg.is_nearest(ip.inner[0].point)) {
-          nodes.push(new GlassSegment(p, pbg, ip.inner[0].point));
+          push_new(p, pbg, ip.inner[0].point);
         }
         for (let i = 1; i < ip.inner.length; i++) {
-          nodes.push(new GlassSegment(p, ip.inner[i - 1].point, ip.inner[i].point));
+          push_new(p, ip.inner[i - 1].point, ip.inner[i].point);
         }
         if (!pe.is_i && !ip.inner[ip.inner.length - 1].point.is_nearest(peg)) {
-          nodes.push(new GlassSegment(p, ip.inner[ip.inner.length - 1].point, peg));
+          push_new(p, ip.inner[ip.inner.length - 1].point, peg);
         }
       }
       if (ip.outer.length) {
         ip.outer.sort(sort);
         if (!pb.is_i && !ip.outer[0].point.is_nearest(pbg)) {
-          nodes.push(new GlassSegment(p, ip.outer[0].point, pbg, true));
+          push_new(p, ip.outer[0].point, pbg, true);
         }
         for (let i = 1; i < ip.outer.length; i++) {
-          nodes.push(new GlassSegment(p, ip.outer[i].point, ip.outer[i - 1].point, true));
+          push_new(p, ip.outer[i].point, ip.outer[i - 1].point, true);
         }
         if (!pe.is_i && !peg.is_nearest(ip.outer[ip.outer.length - 1].point)) {
-          nodes.push(new GlassSegment(p, peg, ip.outer[ip.outer.length - 1].point, true));
+          push_new(p, peg, ip.outer[ip.outer.length - 1].point, true);
         }
       }
       if (!ip.inner.length) {
         if (!pb.is_i && !pe.is_i) {
-          nodes.push(new GlassSegment(p, pbg, peg));
+          push_new(p, pbg, peg);
         }
       }
       if (!ip.outer.length && (pb.is_cut || pe.is_cut || pb.is_t || pe.is_t)) {
         if (!pb.is_i && !pe.is_i) {
-          nodes.push(new GlassSegment(p, peg, pbg, true));
+          push_new(p, peg, pbg, true);
         }
+      }
+      else if(pb.is_x || pe.is_x) {
+        push_new(p, peg, pbg, true);
       }
     });
     return nodes;
@@ -4232,6 +4552,31 @@ class Contour extends AbstractFilling(paper$1.Layer) {
     });
     return nodes;
   }
+  count_nodes() {
+    const nodes = new PointMap();
+    this.profiles.forEach((profile) => {
+      const {b, e} = profile;
+      let findedb;
+      let findede;
+      for(const [key, value] of nodes) {
+        if (b.is_nearest(key)) {
+          value.push({profile, point: 'b'});
+          findedb = true;
+        }
+        if (e.is_nearest(key)) {
+          value.push({profile, point: 'e'});
+          findede = true;
+        }
+      }
+      if (!findedb) {
+        nodes.set(b.clone(), [{profile, point: 'b'}]);
+      }
+      if (!findede) {
+        nodes.set(e.clone(), [{profile, point: 'e'}]);
+      }
+    });
+    return nodes;
+  }
   notify(obj, type = 'update') {
     if (obj.type) {
       type = obj.type;
@@ -4261,8 +4606,9 @@ class Contour extends AbstractFilling(paper$1.Layer) {
         if (!findede && elm.has_cnn(profiles[j], elm.e) && elm.e.is_nearest(profiles[j].b))
           findede = true;
       }
-      if (!findedb || !findede)
+      if (!findedb || !findede){
         to_remove.push(elm);
+      }
     }
     for (let i = 0; i < profiles.length; i++) {
       const elm = profiles[i];
@@ -4437,6 +4783,9 @@ class Contour extends AbstractFilling(paper$1.Layer) {
       if (err) {
         elm.fill_error();
       }
+      else if(elm.path.is_self_intersected()) {
+        elm.fill_error();
+      }
       else {
         elm.path.fillColor = BuilderElement.clr_by_clr.call(elm, elm._row.clr, false);
       }
@@ -4556,7 +4905,7 @@ class Contour extends AbstractFilling(paper$1.Layer) {
     if (!properties) {
       return;
     }
-    const {length, width} = $p.job_prm.properties;
+    const {length, width} = properties;
     ox.inserts.find_rows({cnstr}, (row) => {
       if (row.inset.insert_type == $p.enm.inserts_types.Подоконник) {
         const bottom = this.profiles_by_side('bottom');
@@ -4929,11 +5278,11 @@ class Contour extends AbstractFilling(paper$1.Layer) {
     this.sectionals.forEach((elm) => elm.redraw());
     this.notify(this, 'contour_redrawed', this._attr._bounds);
   }
-  refresh_prm_links() {
+  refresh_prm_links(root) {
     const {cnstr} = this;
     let notify;
     this.params.find_rows({
-      cnstr: cnstr || -9999,
+      cnstr: root ? 0 : cnstr || -9999,
       inset: $p.utils.blank.guid,
       hide: {not: true},
     }, (prow) => {
@@ -5064,9 +5413,10 @@ class Contour extends AbstractFilling(paper$1.Layer) {
       if (set_handle_height(row)) {
         return false;
       }
-      if (row.is_set_row) {
+      const {nom} = row;
+      if (nom && row.is_set_row) {
         let ok = false;
-        row.nom.get_spec(this, cache, true).each((sub_row) => {
+        nom.get_spec(this, cache, true).each((sub_row) => {
           if (set_handle_height(sub_row)) {
             return !(ok = true);
           }
@@ -5810,7 +6160,7 @@ class BuilderElement extends paper$1.Group {
       this._row.elm = this.project.ox.coordinates.aggregate([], ["elm"], "max") + 1;
     }
     if(this._row.elm_type.empty() && !this.inset.empty()){
-      this._row.elm_type = this.inset.nom().elm_type;
+      this._row.elm_type = this.nom.elm_type;
     }
     this.project.register_change();
   }
@@ -6029,9 +6379,8 @@ class BuilderElement extends paper$1.Group {
     return "№" + this.elm;
   }
   get ref() {
-    const {inset} = this;
-    const nom = inset.nom(this);
-    return nom && !nom.empty() ? nom.ref : inset.ref;
+    const {nom} = this;
+    return nom && !nom.empty() ? nom.ref : this.inset.ref;
   }
   get width() {
     return this.nom.width || 80;
@@ -6085,11 +6434,13 @@ class BuilderElement extends paper$1.Group {
     }
   }
   set_clr(v, ignore_select) {
-    this._row.clr = v;
+    if(this._row.clr != v) {
+      this._row.clr = v;
+      this.project.register_change();
+    }
     if(this.path instanceof paper$1.Path){
       this.path.fillColor = BuilderElement.clr_by_clr.call(this, this._row.clr, false);
     }
-    this.project.register_change();
   }
   t_parent(be) {
     return this;
@@ -6445,8 +6796,18 @@ class Filling extends AbstractFilling(BuilderElement) {
       const {project, elm, clr} = this;
       const {glass_specification} = project.ox;
       const proto = glass_specification.find_rows({elm});
-      if(!inset.clr_group.empty() && inset.clr_group.clr_conformity.count() && !inset.clr_group.clr_conformity._obj.some((row) => row.clr1 == clr)) {
-        this.clr = inset.clr_group.clr_conformity.get(0).clr1;
+      if(!inset.clr_group.empty() && inset.clr_group.clr_conformity.count() &&
+          !inset.clr_group.clr_conformity._obj.some((row) => row.clr1 == clr || row.clr1 == clr.parent)) {
+        const {clr1} = inset.clr_group.clr_conformity.get(0);
+        if(clr1.is_folder) {
+          $p.cat.clrs.find_rows({parent: clr1}, (v) => {
+            this.clr = v;
+            return false;
+          });
+        }
+        else {
+          this.clr = clr1;
+        }
       }
       if(proto.length) {
         glass_specification.clear({elm});
@@ -6544,7 +6905,7 @@ class Filling extends AbstractFilling(BuilderElement) {
       path.addSegments(attr.segments);
     }
     else if(Array.isArray(attr)){
-      const {length} = attr;
+      let {length} = attr;
       const {connections} = this.project;
       let prev, curr, next, sub_path;
       for(let i=0; i<length; i++ ){
@@ -6556,7 +6917,7 @@ class Filling extends AbstractFilling(BuilderElement) {
         curr.sub_path = sub_path.equidistant(
           (sub_path._reversed ? -curr.profile.d1 : curr.profile.d2) + (curr.cnn ? curr.cnn.sz : 20), consts.sticking);
       }
-      for(let i=0; i<length; i++ ){
+      for (let i = 0; i < length; i++) {
         prev = i === 0 ? attr[length-1] : attr[i-1];
         curr = attr[i];
         next = i === length-1 ? attr[0] : attr[i+1];
@@ -6572,7 +6933,25 @@ class Filling extends AbstractFilling(BuilderElement) {
         }
         curr.sub_path = curr.sub_path.get_subpath(curr.pb, curr.pe);
       }
-      for(let i=0; i<length; i++ ){
+      const remove = [];
+      for (let i = 0; i < length; i++) {
+        prev = i === 0 ? attr[length-1] : attr[i-1];
+        next = i === length-1 ? attr[0] : attr[i+1];
+        const crossings =  prev.sub_path.getCrossings(next.sub_path);
+        if(crossings.length){
+          if((prev.e.getDistance(crossings[0].point) < prev.profile.width * 2) ||  (next.b.getDistance(crossings[0].point) < next.profile.width * 2)) {
+            remove.push(attr[i]);
+            prev.sub_path.splitAt(crossings[0]);
+            const nloc = next.sub_path.getLocationOf(crossings[0].point);
+            next.sub_path = next.sub_path.splitAt(nloc);
+          }
+        }
+      }
+      for(const segm of remove) {
+        attr.splice(attr.indexOf(segm), 1);
+        length--;
+      }
+      for (let i = 0; i < length; i++) {
         curr = attr[i];
         path.addSegments(curr.sub_path.segments);
         ["anext","pb","pe"].forEach((prop) => { delete curr[prop]; });
@@ -7045,14 +7424,161 @@ class GeneratrixElement extends BuilderElement {
     }
   }
 }
+class Magnetism {
+  constructor(scheme) {
+    this.scheme = scheme;
+  }
+  get selected() {
+    const {profiles} = this.scheme.activeLayer;
+    const selected = {profiles};
+    for(const {generatrix} of profiles) {
+      if(generatrix.firstSegment.selected) {
+        if(selected.profile) {
+          selected.break = true;
+          break;
+        }
+        selected.profile = generatrix.parent;
+        selected.point = 'b';
+      }
+      if(generatrix.lastSegment.selected) {
+        if(selected.profile) {
+          selected.break = true;
+          break;
+        }
+        selected.profile = generatrix.parent;
+        selected.point = 'e';
+      }
+    }
+    return selected;
+  }
+  filter(selected) {
+    const point = selected.profile[selected.point];
+    const nodes = [selected];
+    for(const profile of selected.profiles) {
+      if(profile !== selected.profile) {
+        if(profile.b.is_nearest(point, true)) {
+          nodes.push({profile, point: 'b'});
+        }
+        if(profile.e.is_nearest(point, true)) {
+          nodes.push({profile, point: 'e'});
+        }
+        const px = (profile.nearest(true) ? profile.rays.outer : profile.generatrix).getNearestPoint(point);
+        if(px.is_nearest(point, true)) {
+          nodes.push({profile, point: 't'});
+        }
+      }
+    }
+    return nodes;
+  }
+  short_glass(point) {
+    for(const glass of this.scheme.activeLayer.glasses(false, true)){
+      for(const segm of glass.outer_profiles) {
+        if((segm.b.is_nearest(point) || segm.e.is_nearest(point)) &&
+          segm.sub_path && segm.sub_path.length < consts.sticking) {
+          return {segm, glass};
+        }
+      }
+    }
+  }
+  m1() {
+    const {tb_left} = this.scheme._scope;
+    const previous = tb_left && tb_left.get_selected();
+    Promise.resolve().then(() => {
+      const {selected} = this;
+      if(selected.break) {
+        $p.msg.show_msg({
+          type: 'alert-info',
+          text: `Выделено более одного узла`,
+          title: 'Магнит 0-штапик'
+        });
+      }
+      else if(!selected.profile) {
+        $p.msg.show_msg({
+          type: 'alert-info',
+          text: `Не выделено ни одного узла профиля`,
+          title: 'Магнит 0-штапик'
+        });
+      }
+      else {
+        const spoint = selected.profile[selected.point];
+        const res = this.short_glass(spoint);
+        if(res) {
+          const {segm, glass} = res;
+          const {Штапик} = $p.enm.elm_types;
+          let cl, negate;
+          this.scheme.ox.cnn_elmnts.find_rows({elm1: glass.elm, elm2: segm.profile.elm}, (row) => {
+            cl = row.aperture_len;
+          });
+          if(!cl) {
+            $p.msg.show_msg({
+              type: 'alert-info',
+              text: `Не найдена строка соединения короткого ребра с профилем`,
+              title: 'Магнит 0-штапик'
+            });
+          }
+          else {
+            const cnn = selected.profile.cnn_point(selected.point);
+            const {profile} = cnn;
+            const point = profile.generatrix.getNearestPoint(spoint);
+            const offset = profile.generatrix.getOffsetOf(point);
+            let tangent = profile.generatrix.getTangentAt(offset);
+            if(Math.abs(segm.sub_path.getTangentAt(0).angle - tangent.angle) < 90) {
+              negate = !negate;
+            }
+            if(segm.b.getDistance(spoint) > segm.e.getDistance(spoint)) {
+              negate = !negate;
+            }
+            if(!negate) {
+              tangent = tangent.negate();
+            }
+            selected.profile.move_points(tangent.multiply(cl));
+          }
+        }
+        else {
+          $p.msg.show_msg({
+            type: 'alert-info',
+            text: `Не найдено коротких сегментов заполнений<br />в окрестности выделенной точки`,
+            title: 'Магнит 0-штапик'
+          });
+        }
+      }
+    });
+    if(previous) {
+      return this.scheme._scope.select_tool(previous.replace('left_', ''));
+    }
+  }
+}
 Object.defineProperties(paper$1.Path.prototype, {
   getDirectedAngle: {
-      value: function (point) {
-        var np = this.getNearestPoint(point),
-          offset = this.getOffsetOf(np);
-        return this.getTangentAt(offset).getDirectedAngle(point.add(np.negate()));
-      }
-    },
+    value: function (point) {
+      const np = this.getNearestPoint(point),
+        offset = this.getOffsetOf(np);
+      return this.getTangentAt(offset).getDirectedAngle(point.add(np.negate()));
+    }
+  },
+  is_self_intersected: {
+    value: function () {
+      const {curves} = this;
+      return curves.some((crv1, i1) => {
+        return curves.some((crv2, i2) => {
+          const intersections = crv1.getIntersections(crv2);
+          if(intersections.length) {
+            if(intersections.length > 1) {
+              return true;
+            }
+            const {point} = intersections[0];
+            if(crv2.point1.is_nearest(crv1.point2, 0) && point.is_nearest(crv1.point2, 0)) {
+              return false;
+            }
+            if(crv1.point1.is_nearest(crv2.point2, 0) && point.is_nearest(crv1.point1, 0)) {
+              return false;
+            }
+            return true;
+          }
+        })
+      })
+    }
+  },
   angle_to: {
       value : function(other, point, interior, round){
         const p1 = this.getNearestPoint(point),
@@ -7088,6 +7614,11 @@ Object.defineProperties(paper$1.Path.prototype, {
         return true;
       }
     },
+  is_nearest: {
+    value: function (point, sticking) {
+      return point.is_nearest(this.getNearestPoint(point), sticking);
+    }
+  },
   get_subpath: {
       value: function (point1, point2) {
         let tmp;
@@ -7240,6 +7771,14 @@ Object.defineProperties(paper$1.Path.prototype, {
         }
       }
     },
+  point_pos: {
+    value: function (point, interior) {
+      const np = this.getNearestPoint(interior);
+      const offset = this.getOffsetOf(np);
+      const line = new paper$1.Line(np, np.add(this.getTangentAt(offset)));
+      return line.getSide(point, true);
+    }
+  },
   rmin: {
     value: function() {
       if(!this.hasHandles()){
@@ -7389,16 +7928,17 @@ class CnnPoint {
     this.initialize();
   }
   get is_t() {
-    if(!this.cnn || this.cnn.cnn_type == $p.enm.cnn_types.УгловоеДиагональное) {
+    const {cnn} = this;
+    if(!cnn || cnn.cnn_type == $p.enm.cnn_types.УгловоеДиагональное) {
       return false;
     }
-    if(this.cnn.cnn_type == $p.enm.cnn_types.ТОбразное) {
+    if(cnn.cnn_type == $p.enm.cnn_types.ТОбразное) {
       return true;
     }
-    if(this.cnn.cnn_type == $p.enm.cnn_types.УгловоеКВертикальной && this.parent.orientation != $p.enm.orientations.vert) {
+    if(cnn.cnn_type == $p.enm.cnn_types.УгловоеКВертикальной && this.parent.orientation != $p.enm.orientations.vert) {
       return true;
     }
-    if(this.cnn.cnn_type == $p.enm.cnn_types.УгловоеКГоризонтальной && this.parent.orientation != $p.enm.orientations.hor) {
+    if(cnn.cnn_type == $p.enm.cnn_types.УгловоеКГоризонтальной && this.parent.orientation != $p.enm.orientations.hor) {
       return true;
     }
     return false;
@@ -7407,12 +7947,16 @@ class CnnPoint {
     return !(this.is_i || this.profile_point == 'b' || this.profile_point == 'e' || this.profile == this.parent);
   }
   get is_l() {
-    return this.is_t ||
-      !!(this.cnn && (this.cnn.cnn_type == $p.enm.cnn_types.УгловоеКВертикальной ||
-        this.cnn.cnn_type == $p.enm.cnn_types.УгловоеКГоризонтальной));
+    const {cnn} = this;
+    const {УгловоеКВертикальной, УгловоеКГоризонтальной} = $p.enm.cnn_types;
+    return this.is_t || !!(cnn && (cnn.cnn_type === УгловоеКВертикальной || cnn.cnn_type === УгловоеКГоризонтальной));
   }
   get is_i() {
     return !this.profile && !this.is_cut;
+  }
+  get is_x() {
+    const {cnn} = this;
+    return cnn && cnn.cnn_type === $p.enm.cnn_types.КрестВСтык;
   }
   get parent() {
     return this._parent;
@@ -7422,10 +7966,10 @@ class CnnPoint {
   }
   clear() {
     if(this.profile_point) {
-      delete this.profile_point;
+      this.profile_point = '';
     }
     if(this.is_cut) {
-      delete this.is_cut;
+      this.is_cut = false;
     }
     this.profile = null;
     this.err = null;
@@ -7433,6 +7977,10 @@ class CnnPoint {
     this.cnn_types = $p.enm.cnn_types.acn.i;
     if(this.cnn && this.cnn.cnn_type != $p.enm.cnn_types.i) {
       this.cnn = null;
+    }
+    const {_corns} = this._parent._attr;
+    if(_corns.length > 5) {
+      _corns.length = 5;
     }
   }
   get err() {
@@ -8098,9 +8646,9 @@ class ProfileItem extends GeneratrixElement {
             _rays.b.cnn = null;
           }
         }
-        const imposts = this.joined_imposts();
+        const {inner, outer} = this.joined_imposts();
         const elm2 = this.elm;
-        for (const {profile} of imposts.inner.concat(imposts.outer)) {
+        for (const {profile} of inner.concat(outer)) {
           const {b, e} = profile.rays;
           b.profile == this && b.clear(true);
           e.profile == this && e.clear(true);
@@ -8168,7 +8716,7 @@ class ProfileItem extends GeneratrixElement {
       return cnn_point;
     }
     const {_corns} = _attr;
-    function intersect_point(path1, path2, index) {
+    function intersect_point(path1, path2, index, ipoint = cnn_point.point) {
       const intersections = path1.getIntersections(path2);
       let delta = Infinity, tdelta, point;
       if(intersections.length == 1) {
@@ -8176,12 +8724,12 @@ class ProfileItem extends GeneratrixElement {
           _corns[index] = intersections[0].point;
         }
         else {
-          return intersections[0].point.getDistance(cnn_point.point, true);
+          return intersections[0].point.getDistance(ipoint, true);
         }
       }
       else if(intersections.length > 1) {
         intersections.forEach((o) => {
-          tdelta = o.point.getDistance(cnn_point.point, true);
+          tdelta = o.point.getDistance(ipoint, true);
           if(tdelta < delta) {
             delta = tdelta;
             point = o.point;
@@ -8202,24 +8750,72 @@ class ProfileItem extends GeneratrixElement {
     const {cnn_types} = $p.enm;
     if(cnn_point.is_t || (cnn_type == cnn_types.xx && !cnn_point.profile_point)) {
       !cnn_point.profile.path.segments.length && cnn_point.profile.redraw();
-      if(profile_point == 'b') {
-        if(cnn_point.profile.cnn_side(this, null, prays) === $p.enm.cnn_sides.Снаружи) {
-          intersect_point(prays.outer, rays.outer, 1);
-          intersect_point(prays.outer, rays.inner, 4);
+      const nodes = new Set();
+      let profile2;
+      cnn_point.point && !(this instanceof Onlay) && this.layer.profiles.forEach((profile) => {
+        if(profile !== this){
+          if(cnn_point.point.is_nearest(profile.b, true)) {
+            const cp = profile.cnn_point('b').profile;
+            if(cp !== this) {
+              if(cp !== cnn_point.profile || cnn_point.profile.cnn_side(this) === cnn_point.profile.cnn_side(profile)) {
+                nodes.add(profile);
+              }
+            }
+          }
+          else if(cnn_point.point.is_nearest(profile.e, true)) {
+            const cp = profile.cnn_point('e').profile;
+            if(cp !== this) {
+              if(cp !== cnn_point.profile || cnn_point.profile.cnn_side(this) === cnn_point.profile.cnn_side(profile)) {
+                nodes.add(profile);
+              }
+            }
+          }
+          else if(profile.generatrix.is_nearest(cnn_point.point, true)) {
+            nodes.add(profile);
+          }
         }
-        else {
-          intersect_point(prays.inner, rays.outer, 1);
-          intersect_point(prays.inner, rays.inner, 4);
+      });
+      nodes.forEach((p2) => {
+        if(p2 !== cnn_point.profile) {
+          profile2 = p2;
+        }
+      });
+      const side = cnn_point.profile.cnn_side(this, null, prays) === $p.enm.cnn_sides.Снаружи ? 'outer' : 'inner';
+      if(profile2) {
+        const interior = generatrix.getPointAt(generatrix.length/2);
+        const prays2 = profile2 && profile2.rays;
+        const side2 = profile2.cnn_side(this, null, prays2) === $p.enm.cnn_sides.Снаружи ? 'outer' : 'inner';
+        const pt1 = intersect_point(prays[side], rays.outer, 0, interior);
+        const pt2 = intersect_point(prays[side], rays.inner, 0, interior);
+        const pt3 = intersect_point(prays2[side2], rays.outer, 0, interior);
+        const pt4 = intersect_point(prays2[side2], rays.inner, 0, interior);
+        if(profile_point == 'b') {
+          pt1 < pt3 ? intersect_point(prays[side], rays.outer, 1) : intersect_point(prays2[side2], rays.outer, 1);
+          pt2 < pt4 ? intersect_point(prays[side], rays.inner, 4) : intersect_point(prays2[side2], rays.inner, 4);
+          intersect_point(prays2[side2], prays[side], 5);
+          if(rays.inner.point_pos(_corns[5]) >= 0 || rays.outer.point_pos(_corns[5]) >= 0) {
+            delete _corns[5];
+          }
+        }
+        else if(profile_point == 'e') {
+          pt1 < pt3 ? intersect_point(prays[side], rays.outer, 2) : intersect_point(prays2[side2], rays.outer, 2);
+          pt2 < pt4 ? intersect_point(prays[side], rays.inner, 3) : intersect_point(prays2[side2], rays.inner, 3);
+          intersect_point(prays2[side2], prays[side], 6);
+          if(rays.inner.point_pos(_corns[6]) >= 0 || rays.outer.point_pos(_corns[6]) >= 0) {
+            delete _corns[6];
+          }
         }
       }
-      else if(profile_point == 'e') {
-        if(cnn_point.profile.cnn_side(this, null, prays) === $p.enm.cnn_sides.Снаружи) {
-          intersect_point(prays.outer, rays.outer, 2);
-          intersect_point(prays.outer, rays.inner, 3);
+      else {
+        if(profile_point == 'b') {
+          intersect_point(prays[side], rays.outer, 1);
+          intersect_point(prays[side], rays.inner, 4);
+          delete _corns[5];
         }
-        else {
-          intersect_point(prays.inner, rays.outer, 2);
-          intersect_point(prays.inner, rays.inner, 3);
+        else if(profile_point == 'e') {
+          intersect_point(prays[side], rays.outer, 2);
+          intersect_point(prays[side], rays.inner, 3);
+          delete _corns[6];
         }
       }
     }
@@ -8393,8 +8989,8 @@ class ProfileItem extends GeneratrixElement {
     return this.generatrix.is_linear();
   }
   is_nearest(p) {
-    return (this.b.is_nearest(p.b, true) || this.generatrix.getNearestPoint(p.b).is_nearest(p.b)) &&
-      (this.e.is_nearest(p.e, true) || this.generatrix.getNearestPoint(p.e).is_nearest(p.e));
+    return (this.b.is_nearest(p.b, true) || this.generatrix.is_nearest(p.b)) &&
+      (this.e.is_nearest(p.e, true) || this.generatrix.is_nearest(p.e));
   }
   is_collinear(p) {
     let angl = p.e.subtract(p.b).getDirectedAngle(this.e.subtract(this.b));
@@ -8524,9 +9120,7 @@ class ProfileItem extends GeneratrixElement {
     ) {
       return true;
     }
-    else {
-      return false;
-    }
+    return false;
   }
   check_distance(element, res, point, check_only) {
     return this.project.check_distance(element, this, res, point, check_only);
@@ -8610,21 +9204,28 @@ class Profile extends ProfileItem {
       if(!(elm instanceof Profile || elm instanceof ProfileConnective) || !elm.isInserted()) {
         return;
       }
-      const {generatrix} = elm;
+      let {generatrix} = elm;
+      if(elm.elm_type === $p.enm.elm_types.Импост) {
+        const pb = elm.cnn_point('b').profile;
+        const pe = elm.cnn_point('e').profile;
+        if(pb && pb.nearest(true) || pe && pe.nearest(true)) {
+          generatrix = generatrix.clone({insert: false}).elongation(90);
+        }
+      }
       let is_nearest = [];
-      if(generatrix.getNearestPoint(b).is_nearest(b)) {
+      if(generatrix.is_nearest(b)) {
         is_nearest.push(b);
       }
-      if(generatrix.getNearestPoint(e).is_nearest(e)) {
+      if(generatrix.is_nearest(e)) {
         is_nearest.push(e);
       }
       if(is_nearest.length < 2 && elm instanceof ProfileConnective) {
-        if(this.generatrix.getNearestPoint(elm.b).is_nearest(elm.b)) {
+        if(this.generatrix.is_nearest(elm.b)) {
           if(is_nearest.every((point) => !point.is_nearest(elm.b))) {
             is_nearest.push(elm.b);
           }
         }
-        if(this.generatrix.getNearestPoint(elm.e).is_nearest(elm.e)) {
+        if(this.generatrix.is_nearest(elm.e)) {
           if(is_nearest.every((point) => !point.is_nearest(elm.e))) {
             is_nearest.push(elm.e);
           }
@@ -8669,9 +9270,10 @@ class Profile extends ProfileItem {
     const tinner = [];
     const touter = [];
     const candidates = {b: [], e: []};
+    const {Снаружи} = $p.enm.cnn_sides;
     const add_impost = (ip, curr, point) => {
       const res = {point: generatrix.getNearestPoint(point), profile: curr};
-      if(this.cnn_side(curr, ip, rays) === $p.enm.cnn_sides.Снаружи) {
+      if(this.cnn_side(curr, ip, rays) === Снаружи) {
         touter.push(res);
       }
       else {
@@ -8701,7 +9303,7 @@ class Profile extends ProfileItem {
     ['b', 'e'].forEach((node) => {
       if(candidates[node].length > 1) {
         candidates[node].some((ip) => {
-          if(this.cnn_side(null, ip, rays) == $p.enm.cnn_sides.Снаружи) {
+          if(this.cnn_side(null, ip, rays) === Снаружи) {
             this.cnn_point(node).is_cut = true;
             return true;
           }
@@ -9092,17 +9694,23 @@ class ProfileConnective extends ProfileItem {
     _row.elm_type = this.elm_type;
   }
   remove() {
-    this.joined_nearests().forEach((np) => {
-      const {_attr} = np;
-      if(_attr._rays){
-        _attr._rays.clear();
+    this.joined_nearests().forEach((rama) => {
+      const {inner, outer} = rama.joined_imposts();
+      for (const {profile} of inner.concat(outer)) {
+        profile.rays.clear();
       }
+      for (const {_attr, elm} of rama.joined_nearests()) {
+        _attr._rays && _attr._rays.clear();
+      }
+      const {_attr, layer} = rama;
+      _attr._rays && _attr._rays.clear();
       if(_attr._nearest){
         _attr._nearest = null;
       }
       if(_attr._nearest_cnn){
         _attr._nearest_cnn = null;
       }
+      layer && layer.notify && layer.notify({profiles: [rama], points: []}, consts.move_points);
     });
     super.remove();
   }
@@ -9480,22 +10088,25 @@ class Scheme extends paper$1.Project {
         return res;
       }
     };
+    this.magnetism = new Magnetism(this);
     this.redraw = () => {
       _attr._opened && typeof requestAnimationFrame == 'function' && requestAnimationFrame(_scheme.redraw);
       if(!_attr._opened || _attr._saving || !_changes.length) {
         return;
       }
       _changes.length = 0;
-      if(_scheme.contours.length) {
+      const {contours} = _scheme;
+      if(contours.length) {
         _scheme.l_connective.redraw();
-        for (let contour of _scheme.contours) {
+        contours[0].refresh_prm_links(true);
+        for (let contour of contours) {
           contour.redraw();
           if(_changes.length && typeof requestAnimationFrame == 'function') {
             return;
           }
         }
         _attr._bounds = null;
-        _scheme.contours.forEach((l) => {
+        contours.forEach((l) => {
           l.contours.forEach((l) => {
             l.save_coordinates(true);
             l.refresh_prm_links();
@@ -9905,7 +10516,7 @@ class Scheme extends paper$1.Project {
       ox._mixin(is_snapshot ? obx :
         obx._obj, null, ['ref', 'name', 'calc_order', 'product', 'leading_product', 'leading_elm', 'origin', 'base_block', 'note', 'partner'], true);
       if(!is_snapshot) {
-        ox.base_block = obx.base_block.empty() ? obx : obx.base_block;
+        ox.base_block = (obx.base_block.empty() || obx.base_block.calc_order.obj_delivery_state === $p.enm.obj_delivery_states.Шаблон) ? obx : obx.base_block;
       }
       this.load(ox);
       ox._data._modified = true;
@@ -9941,7 +10552,7 @@ class Scheme extends paper$1.Project {
     }
     const layers = new Set();
     for (const profile of profiles) {
-      layers.add(profile.layer);
+      profile.layer.fillings && layers.add(profile.layer);
     }
     if(this._attr._align_timer) {
       clearTimeout(this._attr._align_timer);
@@ -10112,34 +10723,32 @@ class Scheme extends paper$1.Project {
   check_inset(attr) {
     const inset = attr.inset ? attr.inset : attr.elm.inset;
     const elm_type = attr.elm ? attr.elm.elm_type : attr.elm_type;
-    const nom = inset.nom();
     const rows = [];
-    if(!nom || nom.empty()) {
-      return inset;
-    }
-    this._dp.sys.elmnts.each(function (row) {
-      if((elm_type ? row.elm_type == elm_type : true) && row.nom.nom() == nom) {
+    let finded;
+    this._dp.sys.elmnts.forEach((row) => {
+      if((elm_type ? row.elm_type == elm_type : true)) {
+        if(row.nom === inset) {
+          finded = true;
+          return false;
+        }
         rows.push(row);
       }
     });
-    for (var i = 0; i < rows.length; i++) {
-      if(rows[i].nom == inset) {
-        return inset;
-      }
+    if(finded) {
+      return inset;
     }
     if(rows.length) {
       return rows[0].nom;
     }
   }
   check_distance(element, profile, res, point, check_only) {
-    const {allow_open_cnn} = this._dp.sys;
     const {acn} = $p.enm.cnn_types;
     let distance, gp, cnns, addls,
       bind_node = typeof check_only == 'string' && check_only.indexOf('node') != -1,
       bind_generatrix = typeof check_only == 'string' ? check_only.indexOf('generatrix') != -1 : check_only,
       node_distance;
     function check_node_distance(node) {
-      if((distance = element[node].getDistance(point)) < (allow_open_cnn ? parseFloat(consts.sticking_l) : consts.sticking)) {
+      if((distance = element[node].getDistance(point)) < parseFloat(consts.sticking_l)) {
         if(typeof res.distance == 'number' && res.distance < distance) {
           res.profile = element;
           res.profile_point = node;
@@ -10310,7 +10919,6 @@ class Scheme extends paper$1.Project {
           check_corns(addl);
         }
       }
-      
     }
     return hit;
   }
@@ -10324,10 +10932,10 @@ class Scheme extends paper$1.Project {
     return layer;
   }
   deselect_all_points(with_items) {
-    this.getItems({class: paper$1.Path}).forEach(function (item) {
-      item.segments.forEach(function (s) {
-        if(s.selected) {
-          s.selected = false;
+    this.getItems({class: paper$1.Path}).forEach((item) => {
+      item.segments.forEach((segm) => {
+        if(segm.selected) {
+          segm.selected = false;
         }
       });
       if(with_items && item.selected) {
@@ -10644,6 +11252,1206 @@ const consts = new function Settings(){
 	this.move_handle = 'move_handle';
 	this.move_shapes = 'move-shapes';
 };
+class Pricing {
+  constructor($p$$1) {
+    $p$$1.md.once("predefined_elmnts_inited", () => {
+      this.by_local()
+        .then((loc) => {
+          return !loc && this.by_range();
+        })
+        .then(() => {
+          $p$$1.adapters.pouch.emit('pouch_complete_loaded');
+          $p$$1.doc.nom_prices_setup.pouch_db.changes({
+            since: 'now',
+            live: true,
+            include_docs: true,
+            selector: {class_name: {$in: ['doc.nom_prices_setup', 'cat.formulas']}}
+          }).on('change', (change) => {
+            if(change.doc.class_name == 'doc.nom_prices_setup'){
+              setTimeout(() => {
+                this.by_doc(change.doc);
+              }, 1000);
+            }
+          });
+        });
+    });
+  }
+  build_cache(rows) {
+    const {nom, currencies} = $p.cat;
+    const note = 'Индекс цен номенклатуры';
+    for(const {key, value} of rows){
+      if(!Array.isArray(value)){
+        return setTimeout(() => $p.iface.do_reload('', note), 1000);
+      }
+      const onom = nom.get(key[0], false, true);
+      if (!onom || !onom._data){
+        $p.record_log({
+          class: 'error',
+          nom: key[0],
+          note,
+          value
+        });
+        continue;
+      }
+      if (!onom._data._price){
+        onom._data._price = {};
+      }
+      const {_price} = onom._data;
+      if (!_price[key[1]]){
+        _price[key[1]] = {};
+      }
+      _price[key[1]][key[2]] = value.map((v) => ({
+        date: new Date(v.date),
+        currency: currencies.get(v.currency),
+        price: v.price
+      }));
+    }
+  }
+  build_cache_local(prices) {
+    const {nom, currencies} = $p.cat;
+    const note = 'Индекс цен номенклатуры';
+    const date = new Date('2010-01-01');
+    for(const ref in prices) {
+      if(ref[0] === '_' || ref === 'remote_rev') {
+        continue;
+      }
+      const onom = nom.get(ref, false, true);
+      const value = prices[ref];
+      if (!onom || !onom._data){
+        $p.record_log({
+          class: 'error',
+          nom: ref,
+          note,
+          value
+        });
+        continue;
+      }
+      onom._data._price = value;
+      for(const cref in value){
+        for(const pref in value[cref]) {
+          const price = value[cref][pref][0];
+          price.date = date;
+          price.currency = currencies.get(price.currency);
+        }
+      }
+    }
+  }
+  sync_local(pouch, step = 0) {
+    return pouch.remote.doc.get(`_local/price_${step}`)
+      .then((remote) => {
+        return pouch.local.doc.get(`_local/price_${step}`)
+          .then((local) => local.remote_rev)
+          .catch(() => null)
+          .then((rev) => {
+            this.build_cache_local(remote);
+            if(rev !== remote._rev) {
+              remote.remote_rev = remote._rev;
+              if(!rev) {
+                delete remote._rev;
+              }
+              pouch.local.doc.put(remote);
+            }
+            return this.sync_local(pouch, ++step);
+          })
+      })
+      .catch((err) => {
+        if(step !== 0) {
+          pouch.local.doc.get(`_local/price_${step}`)
+            .then((local) => pouch.local.doc.remove(local))
+            .catch(() => null);
+          return true;
+        }
+      });
+  }
+  by_local(step = 0) {
+    const {pouch} = $p.adapters;
+    const pre = step === 0 && pouch.local.doc.adapter !== 'http' && $p.adapters.pouch.authorized ?
+      pouch.remote.doc.info()
+        .then(() => this.sync_local(pouch))
+        .catch((err) => null)
+      :
+      Promise.resolve();
+    return pre.then((loaded) => {
+      if(loaded) {
+        return loaded;
+      }
+      else {
+        return pouch.local.doc.get(`_local/price_${step}`)
+      }
+    })
+      .then((prices) => {
+        if(prices === true) {
+          return prices;
+        }
+        this.build_cache_local(prices);
+        pouch.emit('nom_prices', ++step);
+        return this.by_local(step);
+      })
+      .catch((err) => {
+        return step !== 0;
+      });
+  }
+  by_range(startkey, step = 0) {
+    return $p.doc.nom_prices_setup.pouch_db.query('doc/doc_nom_prices_setup_slice_last',
+      {
+        limit: 600,
+        include_docs: false,
+        startkey: startkey || [''],
+        endkey: ['\ufff0'],
+        reduce: true,
+        group: true,
+      })
+      .then((res) => {
+        this.build_cache(res.rows);
+        $p.adapters.pouch.emit('nom_prices', ++step);
+        if (res.rows.length === 600) {
+          return this.by_range(res.rows[res.rows.length - 1].key, step);
+        }
+      })
+      .catch((err) => {
+        $p.record_log(err);
+      });
+  }
+  by_doc(doc) {
+    const keys = doc.goods.map(({nom, nom_characteristic, price_type}) => [nom, nom_characteristic, price_type]);
+    return $p.doc.nom_prices_setup.pouch_db.query("doc/doc_nom_prices_setup_slice_last",
+      {
+        include_docs: false,
+        keys: keys,
+        reduce: true,
+        group: true,
+      })
+      .then((res) => {
+        this.build_cache(res.rows);
+      });
+  }
+  nom_price(nom, characteristic, price_type, prm, row) {
+    if (row && prm) {
+      const {_owner} = prm.calc_order_row._owner,
+        price_prm = {
+          price_type: price_type,
+          characteristic: characteristic,
+          date: _owner.date,
+          currency: _owner.doc_currency
+        };
+      if (price_type == prm.price_type.price_type_first_cost && !prm.price_type.formula.empty()) {
+        price_prm.formula = prm.price_type.formula;
+      }
+      else if(price_type == prm.price_type.price_type_sale && !prm.price_type.sale_formula.empty()){
+        price_prm.formula = prm.price_type.sale_formula;
+      }
+      if(!characteristic.clr.empty()){
+        price_prm.clr = characteristic.clr;
+      }
+      row.price = nom._price(price_prm);
+      return row.price;
+    }
+  }
+  price_type(prm) {
+    const {utils, job_prm, enm, ireg, cat} = $p;
+    const empty_formula = cat.formulas.get();
+    prm.price_type = {
+      marginality: 1.9,
+      marginality_min: 1.2,
+      marginality_internal: 1.5,
+      discount: 0,
+      discount_external: 10,
+      extra_charge_external: 0,
+      price_type_first_cost: job_prm.pricing.price_type_first_cost,
+      price_type_sale: job_prm.pricing.price_type_sale,
+      price_type_internal: job_prm.pricing.price_type_first_cost,
+      formula: empty_formula,
+      sale_formula: empty_formula,
+      internal_formula: empty_formula,
+      external_formula: empty_formula
+    };
+    const {calc_order_row} = prm;
+    const {nom, characteristic} = calc_order_row;
+    const {partner} = calc_order_row._owner._owner;
+    const filter = nom.price_group.empty() ?
+        {price_group: nom.price_group} :
+        {price_group: {in: [nom.price_group, cat.price_groups.get()]}};
+    const ares = [];
+    ireg.margin_coefficients.find_rows(filter, (row) => {
+      let ok = true;
+      if(!row.key.empty()){
+        row.key.params.forEach((row_prm) => {
+          const {property} = row_prm;
+          if(property.is_calculated){
+            ok = utils.check_compare(property.calculated_value({calc_order_row}), property.extract_value(row_prm), row_prm.comparison_type, enm.comparison_types);
+          }
+          else if(property.empty()){
+            const vpartner = cat.partners.get(row_prm._obj.value, false, true);
+            if(vpartner && !vpartner.empty()){
+              ok = vpartner == partner;
+            }
+          }
+          else{
+            let finded;
+            characteristic.params.find_rows({
+              cnstr: 0,
+              param: property
+            }, (row_x) => {
+              finded = row_x;
+              return false;
+            });
+            if(finded){
+              ok = utils.check_compare(finded.value, property.extract_value(row_prm), row_prm.comparison_type, enm.comparison_types);
+            }
+            else{
+              ok = false;
+            }
+          }
+          if(!ok){
+            return false;
+          }
+        });
+      }
+      if(ok){
+        ares.push(row);
+      }
+    });
+    if(ares.length){
+      ares.sort((a, b) => {
+        if ((!a.key.empty() && b.key.empty()) || (a.key.priority > b.key.priority)) {
+          return -1;
+        }
+        if ((a.key.empty() && !b.key.empty()) || (a.key.priority < b.key.priority)) {
+          return 1;
+        }
+        if (a.price_group.ref > b.price_group.ref) {
+          return -1;
+        }
+        if (a.price_group.ref < b.price_group.ref) {
+          return 1;
+        }
+        return 0;
+      });
+      Object.keys(prm.price_type).forEach((key) => {
+        prm.price_type[key] = ares[0][key];
+      });
+    }
+    partner.extra_fields.find_rows({
+      property: job_prm.pricing.dealer_surcharge
+    }, (row) => {
+      const val = parseFloat(row.value);
+      if(val){
+        prm.price_type.extra_charge_external = val;
+      }
+      return false;
+    });
+    return prm.price_type;
+  }
+  calc_first_cost(prm) {
+    const {marginality_in_spec} = $p.job_prm.pricing;
+    const fake_row = {};
+    if(!prm.spec)
+      return;
+    if(prm.spec.count()){
+      prm.spec.forEach((row) => {
+        const {_obj, nom, characteristic} = row;
+        this.nom_price(nom, characteristic, prm.price_type.price_type_first_cost, prm, _obj);
+        _obj.amount = _obj.price * _obj.totqty1;
+        if(marginality_in_spec){
+          fake_row.nom = nom;
+          const tmp_price = this.nom_price(nom, characteristic, prm.price_type.price_type_sale, prm, fake_row);
+          _obj.amount_marged = (tmp_price ? tmp_price : _obj.price) * _obj.totqty1;
+        }
+      });
+      prm.calc_order_row.first_cost = prm.spec.aggregate([], ["amount"]).round(2);
+    }
+    else{
+      fake_row.nom = prm.calc_order_row.nom;
+      fake_row.characteristic = prm.calc_order_row.characteristic;
+      prm.calc_order_row.first_cost = this.nom_price(fake_row.nom, fake_row.characteristic, prm.price_type.price_type_first_cost, prm, fake_row);
+    }
+    prm.order_rows && prm.order_rows.forEach((value) => {
+      const fake_prm = {
+        spec: value.characteristic.specification,
+        calc_order_row: value
+      };
+      this.price_type(fake_prm);
+      this.calc_first_cost(fake_prm);
+    });
+  }
+  calc_amount (prm) {
+    const {calc_order_row, price_type} = prm;
+    const price_cost = $p.job_prm.pricing.marginality_in_spec && prm.spec.count() ?
+      prm.spec.aggregate([], ["amount_marged"]) :
+      this.nom_price(calc_order_row.nom, calc_order_row.characteristic, price_type.price_type_sale, prm, {});
+    if(price_cost){
+      calc_order_row.price = price_cost.round(2);
+    }
+    else{
+      calc_order_row.price = (calc_order_row.first_cost * price_type.marginality).round(2);
+    }
+    calc_order_row.marginality = calc_order_row.first_cost ?
+      calc_order_row.price * ((100 - calc_order_row.discount_percent)/100) / calc_order_row.first_cost : 0;
+    let extra_charge = $p.wsql.get_user_param("surcharge_internal", "number");
+    if(!$p.current_user.partners_uids.length || !extra_charge){
+      extra_charge = price_type.extra_charge_external || 0;
+    }
+    calc_order_row.price_internal = (calc_order_row.price *
+      (100 - calc_order_row.discount_percent)/100 * (100 + extra_charge)/100).round(2);
+    !prm.hand_start && calc_order_row.value_change("price", {}, calc_order_row.price, true);
+    prm.order_rows && prm.order_rows.forEach((value) => {
+      const fake_prm = {
+        spec: value.characteristic.specification,
+        calc_order_row: value
+      };
+      this.price_type(fake_prm);
+      this.calc_amount(fake_prm);
+    });
+  }
+  from_currency_to_currency (amount, date, from, to) {
+    const {main_currency} = $p.job_prm.pricing;
+    if(!to || to.empty()){
+      to = main_currency;
+    }
+    if(!from || from.empty()){
+      from = main_currency;
+    }
+    if(from == to){
+      return amount;
+    }
+    if(!date){
+      date = new Date();
+    }
+    if(!this.cource_sql){
+      this.cource_sql = $p.wsql.alasql.compile("select top 1 * from `ireg_currency_courses` where `currency` = ? and `period` <= ? order by `period` desc");
+    }
+    let cfrom = {course: 1, multiplicity: 1},
+      cto = {course: 1, multiplicity: 1};
+    if(from != main_currency){
+      const tmp = this.cource_sql([from.ref, date]);
+      if(tmp.length)
+        cfrom = tmp[0];
+    }
+    if(to != main_currency){
+      const tmp = this.cource_sql([to.ref, date]);
+      if(tmp.length)
+        cto = tmp[0];
+    }
+    return (amount * cfrom.course / cfrom.multiplicity) * cto.multiplicity / cto.course;
+  }
+  cut_upload () {
+    if(!$p.current_user.role_available("СогласованиеРасчетовЗаказов") && !$p.current_user.role_available("ИзменениеТехнологическойНСИ")){
+      $p.msg.show_msg({
+        type: "alert-error",
+        text: $p.msg.error_low_acl,
+        title: $p.msg.error_rights
+      });
+      return true;
+    }
+    function upload_acc() {
+      const mgrs = [
+        "cat.users",
+        "cat.individuals",
+        "cat.organizations",
+        "cat.partners",
+        "cat.contracts",
+        "cat.currencies",
+        "cat.nom_prices_types",
+        "cat.price_groups",
+        "cat.cashboxes",
+        "cat.partner_bank_accounts",
+        "cat.organization_bank_accounts",
+        "cat.projects",
+        "cat.stores",
+        "cat.cash_flow_articles",
+        "cat.cost_items",
+        "cat.price_groups",
+        "cat.delivery_areas",
+        "ireg.currency_courses",
+        "ireg.margin_coefficients"
+      ];
+      $p.wsql.pouch.local.ram.replicate.to($p.wsql.pouch.remote.ram, {
+        filter: (doc) => mgrs.indexOf(doc._id.split("|")[0]) != -1
+      })
+        .on('change', (info) => {
+        })
+        .on('paused', (err) => {
+        })
+        .on('active', () => {
+        })
+        .on('denied', (err) => {
+          $p.msg.show_msg(err.reason);
+          $p.record_log(err);
+        })
+        .on('complete', (info) => {
+          if($p.current_user.role_available("ИзменениеТехнологическойНСИ"))
+            upload_tech();
+          else
+            $p.msg.show_msg({
+              type: "alert-info",
+              text: $p.msg.sync_complite,
+              title: $p.msg.sync_title
+            });
+        })
+        .on('error', (err) => {
+          $p.msg.show_msg(err.reason);
+          $p.record_log(err);
+        });
+    }
+    function upload_tech() {
+      const mgrs = [
+        "cat.units",
+        "cat.nom",
+        "cat.nom_groups",
+        "cat.nom_units",
+        "cat.nom_kinds",
+        "cat.elm_visualization",
+        "cat.destinations",
+        "cat.property_values",
+        "cat.property_values_hierarchy",
+        "cat.inserts",
+        "cat.insert_bind",
+        "cat.color_price_groups",
+        "cat.clrs",
+        "cat.furns",
+        "cat.cnns",
+        "cat.production_params",
+        "cat.parameters_keys",
+        "cat.formulas",
+        "cch.properties",
+        "cch.predefined_elmnts"
+      ];
+      $p.wsql.pouch.local.ram.replicate.to($p.wsql.pouch.remote.ram, {
+        filter: (doc) => mgrs.indexOf(doc._id.split("|")[0]) != -1
+      })
+        .on('change', (info) => {
+        })
+        .on('paused', (err) => {
+        })
+        .on('active', () => {
+        })
+        .on('denied', (err) => {
+          $p.msg.show_msg(err.reason);
+          $p.record_log(err);
+        })
+        .on('complete', (info) => {
+          $p.msg.show_msg({
+            type: "alert-info",
+            text: $p.msg.sync_complite,
+            title: $p.msg.sync_title
+          });
+        })
+        .on('error', (err) => {
+          $p.msg.show_msg(err.reason);
+          $p.record_log(err);
+        });
+    }
+    if($p.current_user.role_available("СогласованиеРасчетовЗаказов"))
+      upload_acc();
+    else
+      upload_tech();
+  }
+}
+$p.pricing = new Pricing($p);
+class ProductsBuilding$1 {
+  constructor(listen) {
+    let added_cnn_spec,
+      ox,
+      spec,
+      constructions,
+      coordinates,
+      cnn_elmnts,
+      glass_specification,
+      params;
+    function cnn_row(elm1, elm2) {
+      let res = cnn_elmnts.find_rows({elm1: elm1, elm2: elm2});
+      if(res.length) {
+        return res[0].row;
+      }
+      res = cnn_elmnts.find_rows({elm1: elm2, elm2: elm1});
+      if(res.length) {
+        return res[0].row;
+      }
+      return 0;
+    }
+    function cnn_need_add_spec(cnn, elm1, elm2, point) {
+      if(cnn && cnn.cnn_type == $p.enm.cnn_types.xx) {
+        if(!added_cnn_spec.points) {
+          added_cnn_spec.points = [];
+        }
+        for (let p of added_cnn_spec.points) {
+          if(p.is_nearest(point, true)) {
+            return false;
+          }
+        }
+        added_cnn_spec.points.push(point);
+        return true;
+      }
+      else if(!cnn || !elm1 || !elm2 || added_cnn_spec[elm1] == elm2 || added_cnn_spec[elm2] == elm1) {
+        return false;
+      }
+      added_cnn_spec[elm1] = elm2;
+      return true;
+    }
+    function cnn_add_spec(cnn, elm, len_angl, cnn_other) {
+      if(!cnn) {
+        return;
+      }
+      const sign = cnn.cnn_type == $p.enm.cnn_types.Наложение ? -1 : 1;
+      const {new_spec_row, calc_count_area_mass} = ProductsBuilding$1;
+      cnn_filter_spec(cnn, elm, len_angl).forEach((row_cnn_spec) => {
+        const {nom} = row_cnn_spec;
+        if(nom instanceof $p.CatInserts) {
+          if(len_angl && (row_cnn_spec.sz || row_cnn_spec.coefficient)) {
+            const tmp_len_angl = len_angl._clone();
+            tmp_len_angl.len = (len_angl.len - sign * 2 * row_cnn_spec.sz) * (row_cnn_spec.coefficient || 0.001);
+            nom.calculate_spec({elm, len_angl: tmp_len_angl, ox});
+          }
+          else {
+            nom.calculate_spec({elm, len_angl, ox});
+          }
+        }
+        else {
+          const row_spec = new_spec_row({row_base: row_cnn_spec, origin: len_angl.origin || cnn, elm, nom, spec, ox});
+          if(nom.is_pieces) {
+            if(!row_cnn_spec.coefficient) {
+              row_spec.qty = row_cnn_spec.quantity;
+            }
+            else {
+              row_spec.qty = ((len_angl.len - sign * 2 * row_cnn_spec.sz) * row_cnn_spec.coefficient * row_cnn_spec.quantity - 0.5)
+                .round(nom.rounding_quantity);
+            }
+          }
+          else {
+            row_spec.qty = row_cnn_spec.quantity;
+            if(row_cnn_spec.sz || row_cnn_spec.coefficient) {
+              let sz = row_cnn_spec.sz, finded, qty;
+              if(cnn_other) {
+                cnn_other.specification.find_rows({nom}, (row) => {
+                  sz += row.sz;
+                  qty = row.quantity;
+                  return !(finded = true);
+                });
+              }
+              if(!finded) {
+                sz *= 2;
+              }
+              if(!row_spec.qty && finded && len_angl.art1) {
+                row_spec.qty = qty;
+              }
+              row_spec.len = (len_angl.len - sign * sz) * (row_cnn_spec.coefficient || 0.001);
+            }
+          }
+          if(!row_cnn_spec.formula.empty()) {
+            const qty = row_cnn_spec.formula.execute({
+              ox,
+              elm,
+              len_angl,
+              cnstr: 0,
+              inset: $p.utils.blank.guid,
+              row_cnn: row_cnn_spec,
+              row_spec: row_spec
+            });
+            if(row_cnn_spec.formula.condition_formula && !qty){
+              row_spec.qty = 0;
+            }
+          }
+          calc_count_area_mass(row_spec, spec, len_angl, row_cnn_spec.angle_calc_method);
+        }
+      });
+    }
+    function cnn_filter_spec(cnn, elm, len_angl) {
+      const res = [];
+      const {angle_hor} = elm;
+      const {art1, art2} = $p.job_prm.nom;
+      const {САртикулом1, САртикулом2} = $p.enm.specification_installation_methods;
+      const {check_params} = ProductsBuilding$1;
+      const {cnn_type, specification, selection_params} = cnn;
+      const {ii, xx, acn} = $p.enm.cnn_types;
+      specification.each((row) => {
+        const {nom} = row;
+        if(!nom || nom.empty() || nom == art1 || nom == art2) {
+          return;
+        }
+        if((row.for_direct_profile_only > 0 && !elm.is_linear()) ||
+          (row.for_direct_profile_only < 0 && elm.is_linear())) {
+          return;
+        }
+        if(cnn_type == ii) {
+          if(row.amin > angle_hor || row.amax < angle_hor || row.sz_min > len_angl.len || row.sz_max < len_angl.len) {
+            return;
+          }
+        }
+        else {
+          if(row.amin > len_angl.angle || row.amax < len_angl.angle) {
+            return;
+          }
+        }
+        if((row.set_specification == САртикулом1 && len_angl.art2) || (row.set_specification == САртикулом2 && len_angl.art1)) {
+          return;
+        }
+        if(len_angl.art2 && acn.a.indexOf(cnn_type) != -1 && row.set_specification != САртикулом2 && cnn_type != xx) {
+          return;
+        }
+        if(check_params({params: selection_params, row_spec: row, elm, ox})) {
+          res.push(row);
+        }
+      });
+      return res;
+    }
+    function furn_spec(contour) {
+      if(!contour.parent) {
+        return false;
+      }
+      const {furn_cache, furn} = contour;
+      const {new_spec_row, calc_count_area_mass} = ProductsBuilding$1;
+      if(!furn_check_opening_restrictions(contour, furn_cache)) {
+        return;
+      }
+      contour.update_handle_height(furn_cache);
+      const blank_clr = $p.cat.clrs.get();
+      furn.furn_set.get_spec(contour, furn_cache).each((row) => {
+        const elm = {elm: -contour.cnstr, clr: blank_clr};
+        const row_spec = new_spec_row({elm, row_base: row, origin: row.origin, spec, ox});
+        if(row.is_procedure_row) {
+          row_spec.elm = row.handle_height_min;
+          row_spec.len = row.coefficient / 1000;
+          row_spec.qty = 0;
+          row_spec.totqty = 1;
+          row_spec.totqty1 = 1;
+        }
+        else {
+          row_spec.qty = row.quantity * (!row.coefficient ? 1 : row.coefficient);
+          calc_count_area_mass(row_spec, spec);
+        }
+      });
+    }
+    function furn_check_opening_restrictions(contour, cache) {
+      let ok = true;
+      const {new_spec_row} = ProductsBuilding$1;
+      contour.furn.open_tunes.each((row) => {
+        const elm = contour.profile_by_furn_side(row.side, cache);
+        const len = elm._row.len - 2 * elm.nom.sizefurn;
+        if(len < row.lmin || len > row.lmax || (!elm.is_linear() && !row.arc_available)) {
+          new_spec_row({elm, row_base: {clr: $p.cat.clrs.get(), nom: $p.job_prm.nom.furn_error}, origin: contour.furn, spec, ox});
+          ok = false;
+        }
+      });
+      return ok;
+    }
+    function cnn_spec_nearest(elm) {
+      const nearest = elm.nearest();
+      if(nearest && nearest._row.clr != $p.cat.clrs.predefined('НеВключатьВСпецификацию') && elm._attr._nearest_cnn) {
+        cnn_add_spec(elm._attr._nearest_cnn, elm, {
+          angle: 0,
+          alp1: 0,
+          alp2: 0,
+          len: elm._attr._len,
+          origin: cnn_row(elm.elm, nearest.elm)
+        });
+      }
+    }
+    function base_spec_profile(elm) {
+      const {_row, rays} = elm;
+      if(_row.nom.empty() || _row.nom.is_service || _row.nom.is_procedure || _row.clr == $p.cat.clrs.predefined('НеВключатьВСпецификацию')) {
+        return;
+      }
+      const {b, e} = rays;
+      if(!b.cnn || !e.cnn) {
+        return;
+      }
+      b.check_err();
+      e.check_err();
+      const prev = b.profile;
+      const next = e.profile;
+      const row_cnn_prev = b.cnn.main_row(elm);
+      const row_cnn_next = e.cnn.main_row(elm);
+      const {new_spec_row, calc_count_area_mass} = ProductsBuilding$1;
+      let row_spec;
+      const row_cnn = row_cnn_prev || row_cnn_next;
+      if(row_cnn) {
+        row_spec = new_spec_row({elm, row_base: row_cnn, nom: _row.nom, origin: cnn_row(_row.elm, prev ? prev.elm : 0), spec, ox});
+        row_spec.qty = row_cnn.quantity;
+        const seam = $p.enm.angle_calculating_ways.СварнойШов;
+        const d45 = Math.sin(Math.PI / 4);
+        const dprev = row_cnn_prev ? (
+          row_cnn_prev.angle_calc_method == seam && _row.alp1 > 0 ? row_cnn_prev.sz * d45 / Math.sin(_row.alp1 / 180 * Math.PI) : row_cnn_prev.sz
+        ) : 0;
+        const dnext = row_cnn_next ? (
+          row_cnn_next.angle_calc_method == seam && _row.alp2 > 0 ? row_cnn_next.sz * d45 / Math.sin(_row.alp2 / 180 * Math.PI) : row_cnn_next.sz
+        ) : 0;
+        row_spec.len = (_row.len - dprev - dnext)
+          * ((row_cnn_prev ? row_cnn_prev.coefficient : 0.001) + (row_cnn_next ? row_cnn_next.coefficient : 0.001)) / 2;
+        elm._attr._len = _row.len;
+        _row.len = (_row.len
+          - (!row_cnn_prev || row_cnn_prev.angle_calc_method == seam ? 0 : row_cnn_prev.sz)
+          - (!row_cnn_next || row_cnn_next.angle_calc_method == seam ? 0 : row_cnn_next.sz))
+          * 1000 * ( (row_cnn_prev ? row_cnn_prev.coefficient : 0.001) + (row_cnn_next ? row_cnn_next.coefficient : 0.001)) / 2;
+        if(!elm.is_linear()) {
+          row_spec.len = row_spec.len + _row.nom.arc_elongation / 1000;
+        }
+        if(row_cnn_prev && !row_cnn_prev.formula.empty()) {
+          row_cnn_prev.formula.execute({
+            ox: ox,
+            elm: elm,
+            cnstr: 0,
+            inset: $p.utils.blank.guid,
+            row_cnn: row_cnn_prev,
+            row_spec: row_spec
+          });
+        }
+        else if(row_cnn_next && !row_cnn_next.formula.empty()) {
+          row_cnn_next.formula.execute({
+            ox: ox,
+            elm: elm,
+            cnstr: 0,
+            inset: $p.utils.blank.guid,
+            row_cnn: row_cnn_next,
+            row_spec: row_spec
+          });
+        }
+        const angle_calc_method_prev = row_cnn_prev ? row_cnn_prev.angle_calc_method : null;
+        const angle_calc_method_next = row_cnn_next ? row_cnn_next.angle_calc_method : null;
+        const {СоединениеПополам, Соединение} = $p.enm.angle_calculating_ways;
+        calc_count_area_mass(
+          row_spec,
+          spec,
+          _row,
+          angle_calc_method_prev,
+          angle_calc_method_next,
+          angle_calc_method_prev == СоединениеПополам || angle_calc_method_prev == Соединение ? prev.generatrix.angle_to(elm.generatrix, b.point) : 0,
+          angle_calc_method_next == СоединениеПополам || angle_calc_method_next == Соединение ? elm.generatrix.angle_to(next.generatrix, e.point) : 0
+        );
+      }
+      const len_angl = {
+        angle: 0,
+        alp1: prev ? prev.generatrix.angle_to(elm.generatrix, elm.b, true) : 90,
+        alp2: next ? elm.generatrix.angle_to(next.generatrix, elm.e, true) : 90,
+        len: row_spec ? row_spec.len * 1000 : _row.len,
+        art1: false,
+        art2: true
+      };
+      if(cnn_need_add_spec(b.cnn, _row.elm, prev ? prev.elm : 0, b.point)) {
+        len_angl.angle = len_angl.alp2;
+        if(b.cnn.cnn_type == $p.enm.cnn_types.t || b.cnn.cnn_type == $p.enm.cnn_types.i || b.cnn.cnn_type == $p.enm.cnn_types.xx) {
+          if(cnn_need_add_spec(e.cnn, next ? next.elm : 0, _row.elm, e.point)) {
+            cnn_add_spec(e.cnn, elm, len_angl, b.cnn);
+          }
+        }
+        else {
+          cnn_add_spec(e.cnn, elm, len_angl, b.cnn);
+        }
+        len_angl.angle = len_angl.alp1;
+        len_angl.art2 = false;
+        len_angl.art1 = true;
+        cnn_add_spec(b.cnn, elm, len_angl, e.cnn);
+      }
+      elm.inset.calculate_spec({elm, ox});
+      cnn_spec_nearest(elm);
+      elm.addls.forEach(base_spec_profile);
+      ox.inserts.find_rows({cnstr: -elm.elm}, ({inset, clr}) => {
+        if(inset.is_order_row == $p.enm.specification_order_row_types.Продукция) {
+          $p.record_log('inset_elm_spec: specification_order_row_types.Продукция');
+        }
+        len_angl.origin = inset;
+        len_angl.angle = elm.angle_hor;
+        len_angl.cnstr = elm.layer.cnstr;
+        delete len_angl.art1;
+        delete len_angl.art2;
+        inset.calculate_spec({elm, len_angl, ox});
+      });
+    }
+    function base_spec_sectional(elm) {
+      const {_row, _attr, inset, layer} = elm;
+      if(_row.nom.empty() || _row.nom.is_service || _row.nom.is_procedure || _row.clr == $p.cat.clrs.predefined('НеВключатьВСпецификацию')) {
+        return;
+      }
+      const spec_tmp = spec;
+      inset.calculate_spec({elm, ox});
+      ox.inserts.find_rows({cnstr: -elm.elm}, ({inset, clr}) => {
+        if(inset.is_order_row == $p.enm.specification_order_row_types.Продукция) {
+          const cx = Object.assign(ox.find_create_cx(elm.elm, inset.ref), inset.contour_attrs(layer));
+          ox._order_rows.push(cx);
+          spec = cx.specification.clear();
+        }
+        const len_angl = {
+          angle: 0,
+          alp1: 0,
+          alp2: 0,
+          len: 0,
+          origin: inset,
+          cnstr: layer.cnstr
+        };
+        inset.calculate_spec({elm, len_angl, ox, spec});
+      });
+      spec = spec_tmp;
+    }
+    function base_spec_glass(elm) {
+      const {profiles, imposts, _row} = elm;
+      if(_row.clr == $p.cat.clrs.predefined('НеВключатьВСпецификацию')) {
+        return;
+      }
+      const glength = profiles.length;
+      for (let i = 0; i < glength; i++) {
+        const curr = profiles[i];
+        if(curr.profile && curr.profile._row.clr == $p.cat.clrs.predefined('НеВключатьВСпецификацию')) {
+          return;
+        }
+        const prev = (i == 0 ? profiles[glength - 1] : profiles[i - 1]).profile;
+        const next = (i == glength - 1 ? profiles[0] : profiles[i + 1]).profile;
+        const row_cnn = cnn_elmnts.find_rows({elm1: _row.elm, elm2: curr.profile.elm});
+        const len_angl = {
+          angle: 0,
+          alp1: prev.generatrix.angle_to(curr.profile.generatrix, curr.b, true),
+          alp2: curr.profile.generatrix.angle_to(next.generatrix, curr.e, true),
+          len: row_cnn.length ? row_cnn[0].aperture_len : 0,
+          origin: cnn_row(_row.elm, curr.profile.elm)
+        };
+        (len_angl.len > 3) && cnn_add_spec(curr.cnn, curr.profile, len_angl);
+      }
+      elm.inset.calculate_spec({elm, ox});
+      imposts.forEach(base_spec_profile);
+      ox.inserts.find_rows({cnstr: -elm.elm}, ({inset, clr}) => {
+        if(inset.is_order_row == $p.enm.specification_order_row_types.Продукция) {
+          $p.record_log('inset_elm_spec: specification_order_row_types.Продукция');
+        }
+        inset.calculate_spec({elm, ox});
+      });
+    }
+    function inset_contour_spec(contour) {
+      const spec_tmp = spec;
+      ox.inserts.find_rows({cnstr: contour.cnstr}, ({inset, clr}) => {
+        if(inset.is_order_row == $p.enm.specification_order_row_types.Продукция) {
+          const cx = Object.assign(ox.find_create_cx(-contour.cnstr, inset.ref), inset.contour_attrs(contour));
+          ox._order_rows.push(cx);
+          spec = cx.specification.clear();
+        }
+        const elm = {
+          _row: {},
+          elm: 0,
+          clr: clr,
+          layer: contour,
+        };
+        const len_angl = {
+          angle: 0,
+          alp1: 0,
+          alp2: 0,
+          len: 0,
+          origin: inset,
+          cnstr: contour.cnstr
+        };
+        inset.calculate_spec({elm, len_angl, ox, spec});
+      });
+      spec = spec_tmp;
+    }
+    function base_spec(scheme) {
+      const {Contour, Filling, Sectional, Profile, ProfileConnective} = $p.Editor;
+      added_cnn_spec = {};
+      for (const contour of scheme.getItems({class: Contour})) {
+        for (const elm of contour.children) {
+          elm instanceof Profile && base_spec_profile(elm);
+        }
+        for (const elm of contour.children) {
+          if(elm instanceof Filling) {
+            base_spec_glass(elm);
+          }
+          else if(elm instanceof Sectional) {
+            base_spec_sectional(elm);
+          }
+        }
+        furn_spec(contour);
+        inset_contour_spec(contour);
+      }
+      for (const elm of scheme.l_connective.children) {
+        if(elm instanceof ProfileConnective) {
+          base_spec_profile(elm);
+        }
+      }
+      inset_contour_spec({
+        cnstr: 0,
+        project: scheme,
+        get perimeter() {
+          return this.project.perimeter;
+        }
+      });
+    }
+    this.recalc = function (scheme, attr) {
+      ox = scheme.ox;
+      spec = ox.specification;
+      constructions = ox.constructions;
+      coordinates = ox.coordinates;
+      cnn_elmnts = ox.cnn_elmnts;
+      glass_specification = ox.glass_specification;
+      params = ox.params;
+      spec.clear();
+      ox._order_rows = [];
+      base_spec(scheme);
+      spec.group_by('nom,clr,characteristic,len,width,s,elm,alp1,alp2,origin,dop', 'qty,totqty,totqty1');
+      scheme.draw_visualization();
+      scheme.notify(scheme, 'coordinates_calculated', attr);
+      if(ox.calc_order_row) {
+        $p.spec_building.specification_adjustment({
+          scheme: scheme,
+          calc_order_row: ox.calc_order_row,
+          spec: spec,
+          save: attr.save,
+        }, true);
+      }
+      if(attr.snapshot) {
+        scheme.notify(scheme, 'scheme_snapshot', attr);
+      }
+      if(attr.save) {
+        let saver;
+        if($p.job_prm.use_svgs) {
+          ox.save(undefined, undefined, {
+            svg: {
+              content_type: 'image/svg+xml',
+              data: new Blob([scheme.get_svg()], {type: 'image/svg+xml'})
+            }
+          });
+        }
+        else {
+          ox.svg = scheme.get_svg();
+          saver = ox.save();
+        }
+        saver.then(() => {
+            $p.msg.show_msg([ox.name, 'Спецификация рассчитана']);
+            delete scheme._attr._saving;
+            ox.calc_order.characteristic_saved(scheme, attr);
+            scheme._scope.eve.emit('characteristic_saved', scheme, attr);
+          })
+          .then(() => setTimeout(() => {
+            ox.calc_order._modified && ox.calc_order.save();
+          }, 1000))
+          .catch((ox) => {
+            $p.record_log(ox);
+            delete scheme._attr._saving;
+            if(ox._data && ox._data._err) {
+              $p.msg.show_msg(ox._data._err);
+              delete ox._data._err;
+            }
+          });
+      }
+      else {
+        delete scheme._attr._saving;
+      }
+      ox._data._loading = false;
+    };
+  }
+  static check_params({params, row_spec, elm, cnstr, origin, ox}) {
+    let ok = true;
+    params.find_rows({elm: row_spec.elm}, (prm_row) => {
+      ok = prm_row.param.check_condition({row_spec, prm_row, elm, cnstr, origin, ox});
+      if(!ok) {
+        return false;
+      }
+    });
+    return ok;
+  }
+  static new_spec_row({row_spec, elm, row_base, nom, origin, spec, ox}) {
+    if(!row_spec) {
+      row_spec = spec.add();
+    }
+    row_spec.nom = nom || row_base.nom;
+    if(!row_spec.nom.visualization.empty()) {
+      row_spec.dop = -1;
+    }
+    else if(row_spec.nom.is_procedure) {
+      row_spec.dop = -2;
+    }
+    row_spec.characteristic = row_base.nom_characteristic;
+    if(!row_spec.characteristic.empty() && row_spec.characteristic.owner != row_spec.nom) {
+      row_spec.characteristic = $p.utils.blank.guid;
+    }
+    row_spec.clr = $p.cat.clrs.by_predefined(row_base ? row_base.clr : elm.clr, elm.clr, ox.clr, elm, spec);
+    row_spec.elm = elm.elm;
+    if(origin) {
+      row_spec.origin = origin;
+    }
+    return row_spec;
+  }
+  static calc_qty_len(row_spec, row_base, len) {
+    const {nom} = row_spec;
+    if(nom.cutting_optimization_type == $p.enm.cutting_optimization_types.Нет ||
+      nom.cutting_optimization_type.empty() || nom.is_pieces) {
+      if(!row_base.coefficient || !len) {
+        row_spec.qty = row_base.quantity;
+      }
+      else {
+        if(!nom.is_pieces) {
+          row_spec.qty = row_base.quantity;
+          row_spec.len = (len - row_base.sz) * (row_base.coefficient || 0.001);
+          if(nom.rounding_quantity) {
+            row_spec.qty = (row_spec.qty * row_spec.len).round(nom.rounding_quantity);
+            row_spec.len = 0;
+          }
+          
+        }
+        else if(!nom.rounding_quantity) {
+          row_spec.qty = Math.round((len - row_base.sz) * row_base.coefficient * row_base.quantity - 0.5);
+        }
+        else {
+          row_spec.qty = ((len - row_base.sz) * row_base.coefficient * row_base.quantity).round(nom.rounding_quantity);
+        }
+      }
+    }
+    else {
+      row_spec.qty = row_base.quantity;
+      row_spec.len = (len - row_base.sz) * (row_base.coefficient || 0.001);
+    }
+  }
+  static calc_count_area_mass(row_spec, spec, row_coord, angle_calc_method_prev, angle_calc_method_next, alp1, alp2) {
+    if(!row_spec.qty) {
+      if(row_spec.dop >= 0) {
+        spec.del(row_spec.row - 1, true);
+      }
+      return;
+    }
+    if(row_spec.totqty1 && row_spec.totqty) {
+      return;
+    }
+    if(!angle_calc_method_next) {
+      angle_calc_method_next = angle_calc_method_prev;
+    }
+    if(angle_calc_method_prev && !row_spec.nom.is_pieces) {
+      const {Основной, СварнойШов, СоединениеПополам, Соединение, _90} = $p.enm.angle_calculating_ways;
+      if((angle_calc_method_prev == Основной) || (angle_calc_method_prev == СварнойШов)) {
+        row_spec.alp1 = row_coord.alp1;
+      }
+      else if(angle_calc_method_prev == _90) {
+        row_spec.alp1 = 90;
+      }
+      else if(angle_calc_method_prev == СоединениеПополам) {
+        row_spec.alp1 = (alp1 || row_coord.alp1) / 2;
+      }
+      else if(angle_calc_method_prev == Соединение) {
+        row_spec.alp1 = (alp1 || row_coord.alp1);
+      }
+      if((angle_calc_method_next == Основной) || (angle_calc_method_next == СварнойШов)) {
+        row_spec.alp2 = row_coord.alp2;
+      }
+      else if(angle_calc_method_next == _90) {
+        row_spec.alp2 = 90;
+      }
+      else if(angle_calc_method_next == СоединениеПополам) {
+        row_spec.alp2 = (alp2 || row_coord.alp2) / 2;
+      }
+      else if(angle_calc_method_next == Соединение) {
+        row_spec.alp2 = (alp2 || row_coord.alp2);
+      }
+    }
+    if(row_spec.len) {
+      if(row_spec.width && !row_spec.s) {
+        row_spec.s = row_spec.len * row_spec.width;
+      }
+    }
+    else {
+      row_spec.s = 0;
+    }
+    if(row_spec.s) {
+      row_spec.totqty = row_spec.qty * row_spec.s;
+    }
+    else if(row_spec.len) {
+      row_spec.totqty = row_spec.qty * row_spec.len;
+    }
+    else {
+      row_spec.totqty = row_spec.qty;
+    }
+    row_spec.totqty1 = row_spec.totqty * row_spec.nom.loss_factor;
+    ['len', 'width', 's', 'qty', 'alp1', 'alp2'].forEach((fld) => row_spec[fld] = row_spec[fld].round(4));
+    ['totqty', 'totqty1'].forEach((fld) => row_spec[fld] = row_spec[fld].round(6));
+  }
+}
+if(typeof global !== 'undefined'){
+  global.ProductsBuilding = ProductsBuilding$1;
+}
+$p.ProductsBuilding = ProductsBuilding$1;
+$p.products_building = new ProductsBuilding$1(true);
+class SpecBuilding {
+  constructor($p$$1) {
+  }
+  calc_row_spec (prm, cancel) {
+  }
+  specification_adjustment (attr, with_price) {
+    const {scheme, calc_order_row, spec, save} = attr;
+    const calc_order = calc_order_row._owner._owner;
+    const order_rows = new Map();
+    const adel = [];
+    const ox = calc_order_row.characteristic;
+    const nom = ox.empty() ? calc_order_row.nom : (calc_order_row.nom = ox.owner);
+    $p.pricing.price_type(attr);
+    spec.find_rows({ch: {in: [-1, -2]}}, (row) => adel.push(row));
+    adel.forEach((row) => spec.del(row, true));
+    $p.cat.insert_bind.insets(ox).forEach(({inset, elm_type}) => {
+      const elm = {
+        _row: {},
+        elm: 0,
+        get perimeter() {return scheme ? scheme.perimeter : []},
+        clr: ox.clr,
+        project: scheme,
+      };
+      const len_angl = {
+        angle: 0,
+        alp1: 0,
+        alp2: 0,
+        len: 0,
+        cnstr: 0,
+        origin: inset,
+      };
+      inset.calculate_spec({elm, len_angl, ox, spec});
+    });
+    if(!ox.empty()){
+      adel.length = 0;
+      calc_order.production.forEach((row) => {
+        if (row.ordn === ox){
+          if (ox._order_rows.indexOf(row.characteristic) === -1){
+            adel.push(row);
+          }
+          else {
+            order_rows.set(row.characteristic, row);
+          }
+        }
+      });
+      adel.forEach((row) => calc_order.production.del(row.row-1));
+    }
+    const ax = [];
+    ox._order_rows && ox._order_rows.forEach((cx) => {
+      const row = order_rows.get(cx) || calc_order.production.add({characteristic: cx});
+      row.nom = cx.owner;
+      row.unit = row.nom.storage_unit;
+      row.ordn = ox;
+      row.len = cx.x;
+      row.width = cx.y;
+      row.s = cx.s;
+      row.qty = calc_order_row.qty;
+      row.quantity = calc_order_row.quantity;
+      save && ax.push(cx.save().catch($p.record_log));
+      order_rows.set(cx, row);
+    });
+    if(order_rows.size){
+      attr.order_rows = order_rows;
+    }
+    if(with_price){
+      $p.pricing.calc_first_cost(attr);
+      $p.pricing.calc_amount(attr);
+    }
+    if(save && !attr.scheme && (ox.is_new() || ox._modified)){
+      ax.push(ox.save().catch($p.record_log));
+    }
+    return ax;
+  }
+}
+$p.spec_building = new SpecBuilding($p);
+(function ({prototype}) {
+  const {value_mgr} = prototype;
+  prototype.value_mgr = function(row, f, mf, array_enabled, v) {
+		const tmp = value_mgr.call(this, row, f, mf, array_enabled, v);
+		if(tmp){
+      return tmp;
+    }
+		if(f == 'trans'){
+      return $p.doc.calc_order;
+    }
+		else if(f == 'partner'){
+      return $p.cat.partners;
+    }
+	};
+})($p.classes.DataManager);
 delete Contour.prototype.refresh_links;
 Contour.prototype.refresh_links = function () {
 };
@@ -10695,8 +12503,8 @@ async function prod(ctx, next) {
         coordinates: _obj.coordinates,
         specification: _obj.specification.map((o) => {
           const onom = nom.get(o.nom);
-      return Object.assign(o, {article: onom.article})
-    }),
+          return Object.assign(o, {article: onom.article})
+        }),
       glasses: _obj.glasses,
         params: _obj.params,
         clr: _obj.clr,
@@ -10719,17 +12527,17 @@ async function prod(ctx, next) {
           };
         ox.constructions.forEach(({cnstr}) => {
           project.draw_fragment({elm: -cnstr});
-        res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
-      });
+          res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+        });
         ox.glasses.forEach((row) => {
           const glass = project.draw_fragment({elm: row.elm});
-        res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
-        if(glass){
-          row.formula = glass.formula(true);
-          glass.visible = false;
-        }
-      });
-      });
+          res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+          if(glass){
+            row.formula = glass.formula(true);
+            glass.visible = false;
+          }
+        });
+        });
       }
     }
   }
@@ -10738,7 +12546,7 @@ async function prod(ctx, next) {
     try{
       calc_order.unload();
       project.unload();
-      for(let ox of prod){
+      for(const ox of prod){
         ox.unload();
       }
       prod.length = 0;

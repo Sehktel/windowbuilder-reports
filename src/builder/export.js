@@ -71,8 +71,8 @@ async function prod(ctx, next) {
         coordinates: _obj.coordinates,
         specification: _obj.specification.map((o) => {
           const onom = nom.get(o.nom);
-      return Object.assign(o, {article: onom.article})
-    }),
+          return Object.assign(o, {article: onom.article})
+        }),
       glasses: _obj.glasses,
         params: _obj.params,
         clr: _obj.clr,
@@ -98,19 +98,19 @@ async function prod(ctx, next) {
 
         ox.constructions.forEach(({cnstr}) => {
           project.draw_fragment({elm: -cnstr});
-        res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
-      });
+          res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+        });
 
         ox.glasses.forEach((row) => {
           const glass = project.draw_fragment({elm: row.elm});
-        // подтянем формулу стеклопакета
-        res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
-        if(glass){
-          row.formula = glass.formula(true);
-          glass.visible = false;
-        }
-      });
-      });
+          // подтянем формулу стеклопакета
+          res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+          if(glass){
+            row.formula = glass.formula(true);
+            glass.visible = false;
+          }
+        });
+        });
       }
     }
   }
@@ -121,7 +121,7 @@ async function prod(ctx, next) {
     try{
       calc_order.unload();
       project.unload();
-      for(let ox of prod){
+      for(const ox of prod){
         ox.unload();
       };
       prod.length = 0;

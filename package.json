@@ -1,7 +1,7 @@
 {
   "name": "windowbuilder-reports",
   "description": "Reports and image rendering for windowbuilder project",
-  "version": "2.0.233",
+  "version": "2.0.237",
   "author": "Evgeniy Malyarov <info@oknosoft.ru> (http://www.oknosoft.ru)",
   "license": "SEE LICENSE IN LICENSE.en.md",
   "main": "index.js",
@@ -10,27 +10,28 @@
     "npm": "^5.5"
   },
   "scripts": {
-    "start": "node --inspect-brk ./index",
+    "start": "node ./index",
+    "debug": "node --inspect-brk ./index",
     "build": "node ./scripts/build",
     "canvas": "apt-get install libcairo2-dev libjpeg62-turbo-dev libpango1.0-dev libgif-dev build-essential g++",
     "meta:prebuild": "node ./scripts/meta.prebuild",
-    "meta:link": "node scripts/meta.link"
+    "meta:link": "node ./scripts/meta.link"
   },
   "dependencies": {
     "@koa/cors": "^2.2.1",
-    "koa": "^2.4.1",
+    "koa": "^2.5.0",
     "koa-better-router": "^2.1",
     "md5-file": "^3.2.3",
-    "metadata-abstract-ui": "^2.0.16-beta.46",
-    "metadata-core": "^2.0.16-beta.46",
-    "metadata-pouchdb": "^2.0.16-beta.46",
+    "metadata-abstract-ui": "2.0.16-beta.52",
+    "metadata-core": "2.0.16-beta.52",
+    "metadata-pouchdb": "2.0.16-beta.52",
     "paper-jsdom-canvas": "^0.11.5"
   },
   "devDependencies": {
-    "eslint": "^4.15.0",
+    "eslint": "^4.18.1",
     "eslint-config-react-app": "^2.1.0",
     "eslint-plugin-promise": "^3.6.0",
-    "eslint-plugin-react": "^7.5.1",
+    "eslint-plugin-react": "^7.7.0",
     "gulp": "^3.9",
     "gulp-concat": "^2.6",
     "gulp-rename": "^1.2",
@@ -40,7 +41,7 @@
     "rollup": "^0.51",
     "rollup-plugin-cleanup": "^2.0",
     "rollup-plugin-node-builtins": "^2.1.2",
-    "rollup-plugin-node-resolve": "^3.0.2",
+    "rollup-plugin-node-resolve": "^3.0.3",
     "rollup-plugin-replace": "^2.0.0"
   },
   "homepage": "http://www.oknosoft.ru/zd/",
