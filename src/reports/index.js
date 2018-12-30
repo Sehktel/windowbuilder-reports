@@ -47,7 +47,7 @@ const tmp = async (ctx, next) => {
             })
           })
           .catch(function(err) {
-            console.log(err);
+            console.error(err);
             return next(err);
           });
 

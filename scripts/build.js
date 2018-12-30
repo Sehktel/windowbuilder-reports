@@ -28,7 +28,7 @@ const header = `/*!
  */\n\n`;
 
 return rollup({
-  input: path.resolve(__dirname, '../server/index.js'),
+  input: path.resolve(__dirname, '../src/index.js'),
 	external: function (id) {
     return external.indexOf(id) !== -1 ||
       /^metadata/.test(id) ||

@@ -1,8 +1,11 @@
-# Created by .ignore support plugin (hsz.mobi)
-.idea/
-node_modules/
-/package-lock.json
+# Editor files
+.idea
+.vscode
+
+# npm files
+node_modules
+package-lock.json
+*.log
+
+# Exclude compiled files
 /index.js.map
-/src/geometry/
-/src/metadata/
-/src/modifiers/

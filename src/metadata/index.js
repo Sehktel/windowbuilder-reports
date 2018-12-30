@@ -1,12 +1,4 @@
 
-// модификаторы data-объектов
-import modifiers from './modifiers';
-
-import modifiersNew from './modifiersNew';
-
-// дополняем прототип Object методами observe
-import './observe';
-
 const debug = require('debug')('wb:meta');
 
 // конструктор MetaEngine
@@ -18,7 +10,7 @@ const MetaEngine = metaCore.plugin(metaPouchdb);
 const settings = require('./config/report.settings');
 
 // функция инициализации структуры метаданных
-const meta_init = require('./server/metadata/init.js');
+const meta_init = require('./src/metadata/init.js');
 
 debug('required');
 
@@ -28,15 +20,6 @@ debug('created');
 
 // параметры сеанса инициализируем сразу
 $p.wsql.init(settings);
-
-// эмулируем излучатель событий dhtmlx
-import dhtmlx_eve from './dhtmlx_eve';
-dhtmlx_eve($p);
-
-// обеспечиваем совместимость DataManager с v0.12
-import meta_pouchdb from './meta_pouchdb';
-meta_pouchdb($p.classes.DataManager.prototype);
-
 
 // инициализируем параметры сеанса и метаданные
 (async () => {
@@ -48,16 +31,13 @@ meta_pouchdb($p.classes.DataManager.prototype);
   meta_init($p);
 
   // сообщяем адаптерам пути, суффиксы и префиксы
-  const {wsql, job_prm, adapters} = $p;
-  adapters.pouch.init(wsql, job_prm);
+  const {wsql, job_prm, adapters: {pouch}} = $p;
+  pouch.init(wsql, job_prm);
 
-  // подключим модификаторы
-  modifiers($p);
-  modifiersNew($p);
-  debug('inited & modified');
+  // // подключим модификаторы
+  // modifiers($p);
 
   // загружаем кешируемые справочники в ram и начинаем следить за изменениями ram
-  const {pouch} = $p.adapters;
   pouch.log_in(user_node.username, user_node.password)
     .then(() => pouch.load_data())
     .catch((err) => debug(err));
@@ -76,22 +56,24 @@ meta_pouchdb($p.classes.DataManager.prototype);
       debug(`loadind to ram: page №${page.page} (${page.page * page.limit} from ${page.total_rows})`);
     },
     pouch_complete_loaded(page) {
-      debug(`ready to receive queries, listen on port: ${process.env.PORT || 3000}`);
+      job_prm.complete_loaded = true;
+      debug(`ready to receive queries, listen on port: ${process.env.PORT || 3030}`);
     },
     pouch_doc_ram_loaded() {
       pouch.local.ram.changes({
         since: 'now',
         live: true,
         include_docs: true,
-      }).on('change', (change) => {
+      })
+        .on('change', (change) => {
         // формируем новый
         pouch.load_changes({docs: [change.doc]});
-      }).on('error', (err) => {
+      })
+        .on('error', (err) => {
         debug(`change error ${err}`);
       });
       debug(`loadind to ram: READY`);
-      // обычно, это событие генерирует модуль pricing после загрузки цен, но в данном сервисе цены не нужны
-      pouch.emit('pouch_complete_loaded');
+
     },
   });
 
