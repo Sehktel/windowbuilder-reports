@@ -8,4 +8,3 @@ package-lock.json
 *.log
 
 # Exclude compiled files
-/index.js.map

@@ -6,42 +6,64 @@
  */
 module.exports = function settings(prm) {
 
+  const {env} = process;
+
   return Object.assign(prm || {}, {
 
     // разделитель для localStorage
-    local_storage_prefix: "wb_",
+    local_storage_prefix: 'wb_',
 
     // гостевые пользователи для демо-режима
     guests: [],
 
-    // если понадобится обратиться к 1С, будем использовать irest
-    irest_enabled: true,
-
-    // расположение rest-сервиса 1c по умолчанию
-    rest_path: "",
-
-    // расположение couchdb
-    //couch_path: "https://light.oknosoft.ru/couchdb/wb_",
-    couch_path: process.env.COUCHPATH || "/couchdb/wb_",
-
     // расположение couchdb для nodejs
-    couch_local: process.env.COUCHLOCAL || "http://cou221:5984/wb_",
+    couch_local: env.COUCHLOCAL || 'http://cou221:5984/wb_',
 
     pouch_filter: {
-      meta: "auth/meta"
+      meta: 'auth/meta'
+    },
+
+    use_meta: false,
+
+    // авторизация couchdb
+    user_node: {
+      username: env.DBUSER || 'admin',
+      password: env.DBPWD || 'admin',
+    },
+
+    couch_direct: true,
+
+    // расположение couchdb
+    get couch_path() {
+      return this.couch_local;
     },
 
     // по умолчанию, обращаемся к зоне 21
-    zone: 21,
+    zone: env.ZONE || 21,
 
-    // объявляем номер демо-зоны
-    zone_demo: 1,
+    server: {
+      prefix: '/r',               // Mount path, no trailing slash
+      port: env.PORT || 3030,     // Port
+      maxpost: 40 * 1024 * 1024,  // Max size of POST request
 
-    // размер вложений
-    attachment_max_size: 10000000,
+      rater: {                    // Request rate locker
+        all: {                    // Total requests limit
+          interval: 3,            // Seconds, collect interval
+          limit: 300              // Max requests per interval
+        },
+        ip: {                     // Per-ip requests limit
+          interval: 10,
+          limit: 100
+        }
+      }
+    },
 
-    // разрешаем сохранение пароля
-    enable_save_pwd: true
+    workers: {
+      count: env.WORKERS_COUNT ? parseFloat(env.WORKERS_COUNT) : 1,  // Total threads
+      reloadAt: 3,              // Hour all threads are restarted
+      reloadOverlap: 40e3,      // Gap between restarts of simultaneous threads
+      killDelay: 10e3           // Delay between shutdown msg to worker and kill, ms
+    },
 
   })
 
